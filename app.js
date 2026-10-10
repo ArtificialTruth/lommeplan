@@ -224,13 +224,13 @@ function viewHusk() {
     <div class="bar"><i style="width:${pct}%;background:var(--ac)"></i></div>`;
   for (const k of [...groups.keys()].sort()) {
     const g0 = groups.get(k), g = g0.filter(i => !S.todo.hidden[i.id]), a = g0[0].akt && S.data.aktiviteter[g0[0].akt];
-    h += `<h2 style="display:flex;gap:8px;align-items:baseline">${g0[0].dato ? `<span style="color:var(--nowt)">${DAYS[dayIdx(g0[0].dato)].slice(0, 3)} ${g0[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}${a ? `<button data-act="tadd:${a.id}" aria-label="Tilføj punkt" style="margin-left:auto;color:var(--act);font-size:18px;line-height:1">+</button>` : ""}</h2>${g.length ? "" : '<div class="muted" style="margin:0 0 8px">Ingen punkter. Tryk + for at tilføje.</div>'}`;
+    h += `<h2 style="display:flex;gap:8px;align-items:center">${g0[0].dato ? `<span style="color:var(--nowt)">${DAYS[dayIdx(g0[0].dato)].slice(0, 3)} ${g0[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}${a ? `<button class="plus" data-act="tadd:${a.id}" aria-label="Tilføj punkt">+</button>` : ""}</h2>${g.length ? "" : '<div class="muted" style="margin:0 0 8px">Ingen punkter. Tryk + for at tilføje.</div>'}`;
     for (const i of g) h += `<div class="card" style="padding-left:12px;display:flex;align-items:center;gap:10px"><button data-act="td:${i.id}" aria-label="Afkryds" class="cb ${S.todo.done[i.id] ? "on" : ""}">${S.todo.done[i.id] ? "✓" : ""}</button>
       <div style="flex:1;${S.todo.done[i.id] ? "opacity:.5;text-decoration:line-through" : ""}">${esc(i.txt)} ${i.src === "egen" ? '<span class="chip">egen</span>' : i.src === "doc" ? '<span class="chip dim">fra beskrivelsen</span>' : ""}</div>
       <button data-act="tdel:${i.id}" aria-label="Slet" style="color:var(--mu);padding:6px 8px;font-size:16px">✕</button></div>`;
   }
   if (!items.length) h += `<div class="box muted">Ingen punkter her endnu.</div>`;
-  h += `<button class="fold" data-act="tadd">+ Tilføj punkt</button>`;
+  h += `<button class="btn" data-act="tadd">+ Tilføj punkt</button>`;
   if (hiddenN) h += `<button class="fold" data-act="trestore" style="border-style:solid">Gendan slettede (${hiddenN})</button>`;
   return h;
 }
