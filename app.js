@@ -202,18 +202,19 @@ function todoItems() {
 }
 function viewHusk() {
   const today = ymd(now()), all = todoItems(), hiddenN = all.filter(i => S.todo.hidden[i.id]).length;
-  let items = all.filter(i => !S.todo.hidden[i.id]);
-  if (S.todoTab === "idag") items = items.filter(i => !i.dato || i.dato === today);
-  if (S.todoTab === "egne") items = items.filter(i => i.src === "egen");
+  let base = all;
+  if (S.todoTab === "idag") base = base.filter(i => !i.dato || i.dato === today);
+  if (S.todoTab === "egne") base = base.filter(i => i.src === "egen");
+  const items = base.filter(i => !S.todo.hidden[i.id]);
   const done = items.filter(i => S.todo.done[i.id]).length, pct = items.length ? (done / items.length) * 100 : 0;
   const groups = new Map();
-  for (const i of items) { const k = i.akt ? `${i.dato || ""} ${i.start || ""} ${i.akt}` : "~"; (groups.get(k) || groups.set(k, []).get(k)).push(i); }
+  for (const i of base) { const k = i.akt ? `${i.dato || ""} ${i.start || ""} ${i.akt}` : "~"; (groups.get(k) || groups.set(k, []).get(k)).push(i); }
   let h = `<div class="top"><div><h1>Huskeliste</h1><div class="sub">${done} af ${items.length} klaret</div></div>${ALIEN}</div>
     <div class="seg">${[["idag", "I dag"], ["uge", "Hele ugen"], ["egne", "Mine egne"]].map(([k, l]) => `<button data-act="ht:${k}" class="${S.todoTab === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="bar"><i style="width:${pct}%;background:var(--ac)"></i></div>`;
   for (const k of [...groups.keys()].sort()) {
-    const g = groups.get(k), a = g[0].akt && S.data.aktiviteter[g[0].akt];
-    h += `<h2 style="display:flex;gap:8px;align-items:baseline">${g[0].dato ? `<span style="color:var(--now)">${DAYS[dayIdx(g[0].dato)].slice(0, 3)} ${g[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}</h2>`;
+    const g0 = groups.get(k), g = g0.filter(i => !S.todo.hidden[i.id]), a = g0[0].akt && S.data.aktiviteter[g0[0].akt];
+    h += `<h2 style="display:flex;gap:8px;align-items:baseline">${g0[0].dato ? `<span style="color:var(--now)">${DAYS[dayIdx(g0[0].dato)].slice(0, 3)} ${g0[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}${a ? `<button data-act="tadd:${a.id}" aria-label="Tilføj punkt" style="margin-left:auto;color:var(--ac);font-size:18px;line-height:1">+</button>` : ""}</h2>${g.length ? "" : '<div class="muted" style="margin:0 0 8px">Ingen punkter. Tryk + for at tilføje.</div>'}`;
     for (const i of g) h += `<div class="card" style="padding-left:12px;display:flex;align-items:center;gap:10px"><button data-act="td:${i.id}" aria-label="Afkryds" class="cb ${S.todo.done[i.id] ? "on" : ""}">${S.todo.done[i.id] ? "✓" : ""}</button>
       <div style="flex:1;${S.todo.done[i.id] ? "opacity:.5;text-decoration:line-through" : ""}">${esc(i.txt)} ${i.src === "egen" ? '<span class="chip">egen</span>' : i.src === "doc" ? '<span class="chip dim">fra beskrivelsen</span>' : ""}</div>
       <button data-act="tdel:${i.id}" aria-label="Slet" style="color:var(--mu);padding:6px 8px;font-size:16px">✕</button></div>`;
@@ -223,11 +224,11 @@ function viewHusk() {
   if (hiddenN) h += `<button class="fold" data-act="trestore" style="border-style:solid">Gendan slettede (${hiddenN})</button>`;
   return h;
 }
-function openAddTodo() {
+function openAddTodo(pre) {
   const acts = Object.values(S.data.aktiviteter).sort((x, y) => parseFloat(x.id) - parseFloat(y.id));
   const bg = document.createElement("div"); bg.className = "sheetbg";
   bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">Nyt punkt</h1><div class="field"><label>Hvad skal du huske?</label><textarea id="tt" autofocus></textarea></div>
-    <div class="field"><label>Hører til</label><select id="ta"><option value="">Generelt</option>${acts.map(a => `<option value="${a.id}">${esc(a.id + " · " + a.titel.split(" (")[0])}</option>`).join("")}</select></div>
+    <div class="field"><label>Hører til</label><select id="ta"><option value="">Generelt</option>${acts.map(a => `<option value="${a.id}" ${a.id === pre ? "selected" : ""}>${esc(a.id + " · " + a.titel.split(" (")[0])}</option>`).join("")}</select></div>
     <div class="row2"><button class="btn alt" data-x="close">Annullér</button><button class="btn" data-x="save">Tilføj</button></div></div>`;
   document.body.appendChild(bg);
   bg.addEventListener("click", ev => {
@@ -392,7 +393,7 @@ document.addEventListener("click", ev => {
   else if (act === "td") { const id = p.join(":"); S.todo.done[id] ? delete S.todo.done[id] : (S.todo.done[id] = 1); saveTodo(); }
   else if (act === "tdel") { const id = p.join(":"), i = S.todo.own.findIndex(o => o.id === id); if (i >= 0) S.todo.own.splice(i, 1); else S.todo.hidden[id] = 1; delete S.todo.done[id]; saveTodo(); }
   else if (act === "trestore") { S.todo.hidden = {}; saveTodo(); }
-  else if (act === "tadd") return openAddTodo();
+  else if (act === "tadd") return openAddTodo(p[0]);
   else if (act === "guide") { S.onb = standalone() ? 2 : 1; }
   else if (act === "onb") { S.onb = +p[0]; if (S.onb === 2 && S.me) { S.onb = 0; ls.set("lp_onb", "1"); location.hash = "#/uge"; } }
   else if (act === "pick") { S.me = p.join(":"); ls.set("lp_name", S.me); S.onb = 0; ls.set("lp_onb", "1"); location.hash = "#/uge"; }
