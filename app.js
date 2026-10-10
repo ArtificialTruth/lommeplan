@@ -3,7 +3,7 @@ const DAYS = ["Søndag", "Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag"];
 const DATES = ["2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"];
 const MON = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 const HOME = "DDS Høbjerghus, Høbjerg Hegn 5, 3200 Helsinge";
-const ALIEN = '<svg class="alien" viewBox="-18 -18 36 36"><path d="M0 -14 C14 -14 16 4 7 12 C3 16 -3 16 -7 12 C-16 4 -14 -14 0 -14Z" fill="#fff"/><path d="M-10 -3 Q-4 -1 -3 5 Q-9 5 -11 -1Z" fill="#000"/><path d="M10 -3 Q4 -1 3 5 Q9 5 11 -1Z" fill="#000"/></svg>';
+const ALIEN = '<svg class="alien" viewBox="-18 -18 36 36"><path d="M0 -14 C14 -14 16 4 7 12 C3 16 -3 16 -7 12 C-16 4 -14 -14 0 -14Z" fill="currentColor"/><path d="M-10 -3 Q-4 -1 -3 5 Q-9 5 -11 -1Z" fill="var(--bg)"/><path d="M10 -3 Q4 -1 3 5 Q9 5 11 -1Z" fill="var(--bg)"/></svg>';
 const $app = document.getElementById("app");
 
 // ---------- lager ----------
@@ -21,6 +21,13 @@ const S = {
   cal: { aud: "begge", mine: false, days: [0, 1, 2, 3, 4, 5], skip: [], alarm: 0 },
 };
 const saveOver = () => ls.set("lp_over", JSON.stringify(S.over));
+function applyTheme() {
+  const pref = ls.get("lp_theme", "light");
+  const dark = pref === "dark" || (pref === "system" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? "#000000" : "#f2f3f5";
+}
+applyTheme();
 const saveTodo = () => ls.set("lp_todo", JSON.stringify(S.todo));
 const standalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 
@@ -106,7 +113,7 @@ function viewUge(arg) {
   const date = DATES[i], ev = dayEvents(date), two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
   let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
   h += `<div class="days">${DAYS.map((d, k) => `<button data-act="day:${k}" class="${k === i ? "on" : ""} ${DATES[k] === today ? "today" : ""}">${d.slice(0, 3)}<b>${+DATES[k].slice(8)}</b></button>`).join("")}</div>` + audSeg() + minePill();
-  if (two) h += `<div class="lanehead"><span></span><span class="lh" style="color:var(--ac)">KURSIST</span><span class="lh" style="color:var(--team)">TEAM<button data-act="aud:kursist" style="color:var(--mu)">✕</button></span></div>`;
+  if (two) h += `<div class="lanehead"><span></span><span class="lh" style="color:var(--act)">KURSIST</span><span class="lh" style="color:var(--teamt)">TEAM<button data-act="aud:kursist" style="color:var(--mu)">✕</button></span></div>`;
   const starts = [...new Set(ev.map(e => e.start))].sort();
   h += `<div class="grid ${two ? "two" : ""}">`;
   for (const s of starts) {
@@ -167,6 +174,7 @@ function viewMine() {
   const nOver = Object.keys(S.over).length;
   const orphans = Object.keys(S.over).filter(k => (k.startsWith("e:") ? !S.data.events.some(e => e.id === k.slice(2)) : !S.data.aktiviteter[k.slice(2)])).length;
   let h = `<div class="top"><div><h1>Mig</h1><div class="sub">${S.me ? "Hej " + esc(S.me) : "Vælg dit navn"}</div></div>${ALIEN}</div>
+    <h2>Udseende</h2><div class="seg">${[["light", "Lys"], ["dark", "Mørk"], ["system", "System"]].map(([k, l]) => `<button data-act="theme:${k}" class="${ls.get("lp_theme", "light") === k ? "on" : ""}">${l}</button>`).join("")}</div>
     <h2>Jeg er</h2><select data-act="me">${["", ...S.data.personer].map(n => `<option ${n === (S.me || "") ? "selected" : ""} value="${esc(n)}">${n ? esc(n) : "– vælg navn –"}</option>`).join("")}</select>
     <h2>Føj til kalender</h2><div class="box">
     <div class="field"><label>Målgruppe</label><div class="seg" style="margin:0">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="cal:aud:${k}" class="${S.cal.aud === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
@@ -216,7 +224,7 @@ function viewHusk() {
     <div class="bar"><i style="width:${pct}%;background:var(--ac)"></i></div>`;
   for (const k of [...groups.keys()].sort()) {
     const g0 = groups.get(k), g = g0.filter(i => !S.todo.hidden[i.id]), a = g0[0].akt && S.data.aktiviteter[g0[0].akt];
-    h += `<h2 style="display:flex;gap:8px;align-items:baseline">${g0[0].dato ? `<span style="color:var(--now)">${DAYS[dayIdx(g0[0].dato)].slice(0, 3)} ${g0[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}${a ? `<button data-act="tadd:${a.id}" aria-label="Tilføj punkt" style="margin-left:auto;color:var(--ac);font-size:18px;line-height:1">+</button>` : ""}</h2>${g.length ? "" : '<div class="muted" style="margin:0 0 8px">Ingen punkter. Tryk + for at tilføje.</div>'}`;
+    h += `<h2 style="display:flex;gap:8px;align-items:baseline">${g0[0].dato ? `<span style="color:var(--nowt)">${DAYS[dayIdx(g0[0].dato)].slice(0, 3)} ${g0[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}${a ? `<button data-act="tadd:${a.id}" aria-label="Tilføj punkt" style="margin-left:auto;color:var(--act);font-size:18px;line-height:1">+</button>` : ""}</h2>${g.length ? "" : '<div class="muted" style="margin:0 0 8px">Ingen punkter. Tryk + for at tilføje.</div>'}`;
     for (const i of g) h += `<div class="card" style="padding-left:12px;display:flex;align-items:center;gap:10px"><button data-act="td:${i.id}" aria-label="Afkryds" class="cb ${S.todo.done[i.id] ? "on" : ""}">${S.todo.done[i.id] ? "✓" : ""}</button>
       <div style="flex:1;${S.todo.done[i.id] ? "opacity:.5;text-decoration:line-through" : ""}">${esc(i.txt)} ${i.src === "egen" ? '<span class="chip">egen</span>' : i.src === "doc" ? '<span class="chip dim">fra beskrivelsen</span>' : ""}</div>
       <button data-act="tdel:${i.id}" aria-label="Slet" style="color:var(--mu);padding:6px 8px;font-size:16px">✕</button></div>`;
@@ -397,6 +405,7 @@ document.addEventListener("click", ev => {
   if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
   else if (act === "mine") { S.mine = !S.mine; ls.set("lp_mine", S.mine ? "1" : "0"); }
   else if (act === "expand") S.expand = !S.expand;
+  else if (act === "theme") { ls.set("lp_theme", p[0]); applyTheme(); }
   else if (act === "ht") S.todoTab = p[0];
   else if (act === "td") { const id = p.join(":"); S.todo.done[id] ? delete S.todo.done[id] : (S.todo.done[id] = 1); saveTodo(); }
   else if (act === "tdel") { const id = p.join(":"), i = S.todo.own.findIndex(o => o.id === id); if (i >= 0) S.todo.own.splice(i, 1); else S.todo.hidden[id] = 1; delete S.todo.done[id]; saveTodo(); }
