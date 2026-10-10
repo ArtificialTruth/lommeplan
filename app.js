@@ -16,35 +16,26 @@ const S = {
   env: null, data: null, me: null,
   aud: ls.get("lp_aud", "begge"), mine: ls.get("lp_mine") === "1", demo: ls.get("lp_demo") || null,
   over: (() => { try { return JSON.parse(ls.get("lp_over", "{}")); } catch { return {}; } })(),
-  showPast: false, expand: false, loginErr: "",
+  showPast: false, expand: false, loginErr: "", onb: 0, pw: "", installEv: null, todoTab: "idag",
+  todo: (() => { try { return { done: {}, hidden: {}, own: [], ...JSON.parse(ls.get("lp_todo", "{}")) }; } catch { return { done: {}, hidden: {}, own: [] }; } })(),
   cal: { aud: "begge", mine: false, days: [0, 1, 2, 3, 4, 5], skip: [], alarm: 0 },
 };
 const saveOver = () => ls.set("lp_over", JSON.stringify(S.over));
+const saveTodo = () => ls.set("lp_todo", JSON.stringify(S.todo));
+const standalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 
 // ---------- krypto (WebCrypto) ----------
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-const normCode = s => s.toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
-async function sha256hex(s) {
-  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(s)));
-  return [...h].map(x => x.toString(16).padStart(2, "0")).join("");
-}
-async function unlockWithCode(env, raw) {
-  const code = normCode(raw);
-  if (code.length !== 12) return null;
-  const id = (await sha256hex("lp-id:" + code)).slice(0, 16);
-  const u = env.users.find(x => x.id === id);
-  if (!u) return null;
-  const km = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveKey"]);
-  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: b64d(u.salt), iterations: env.iter }, km, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-  try {
-    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(u.iv), additionalData: enc.encode("lommeplan-user") }, key, b64d(u.ct));
-    return JSON.parse(dec.decode(pt));
-  } catch { return null; }
+const normPw = s => s.toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+async function deriveKeyB64(env, pw) {
+  const km = await crypto.subtle.importKey("raw", enc.encode(normPw(pw)), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: b64d(env.salt), iterations: env.iter }, km, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
 }
 async function decryptData(env, kB64) {
   const key = await crypto.subtle.importKey("raw", b64d(kB64), "AES-GCM", false, ["decrypt"]);
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(env.data.iv), additionalData: enc.encode("lommeplan1") }, key, b64d(env.data.ct));
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(env.iv), additionalData: enc.encode("lommeplan2") }, key, b64d(env.ct));
   return JSON.parse(dec.decode(pt));
 }
 
@@ -105,7 +96,7 @@ function evCard(e, o = {}) {
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
 const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
-const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
+const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
 function viewUge(arg) {
@@ -189,18 +180,87 @@ function viewMine() {
     <h2>Mine rettelser</h2><div class="box"><div class="muted">${nOver ? nOver + " rettede felter gemmes kun på denne telefon." : "Ingen rettelser endnu."}</div>
     <div class="row2"><button class="btn alt" data-act="exp">Eksportér</button><label class="btn alt" style="margin:10px 0">Importér<input type="file" accept="application/json,.json" data-act="imp" hidden></label></div>
     ${nOver ? '<button class="btn ghost" data-act="resetall">Nulstil alle rettelser</button>' : ""}</div>
-    <h2>Avanceret</h2><div class="box"><div class="field"><label>Demo-tid (test af “Nu”)</label><input type="datetime-local" data-act="demo" value="${esc(S.demo || "")}"></div>
+    <h2>Avanceret</h2><div class="box"><button class="btn alt" data-act="guide">Vis installationsguide</button><div class="field"><label>Demo-tid (test af “Nu”)</label><input type="datetime-local" data-act="demo" value="${esc(S.demo || "")}"></div>
     ${S.demo ? '<button class="btn alt" data-act="demooff">Brug rigtig tid</button>' : ""}
     <div class="hint">Plan genereret ${esc(S.data.genereret)} · adgang udløber ${esc(String(S.exp || "").slice(0, 10))}</div>
     <button class="btn ghost" data-act="logout">Glem nøgle på denne telefon</button></div>`;
   return h;
 }
 
+function myActivity(a) { return !!(S.me && (a.bemanding.includes(S.me) || a.ansvarligNavne.includes(S.me))); }
+function todoItems() {
+  const evs = allEvents().filter(e => e.aktivitet).sort((x, y) => x.dato.localeCompare(y.dato) || x.start.localeCompare(y.start));
+  const first = {}; for (const e of evs) if (!first[e.aktivitet]) first[e.aktivitet] = e;
+  const out = [];
+  for (const [id, a] of Object.entries(S.data.aktiviteter)) {
+    const f = first[id];
+    (a.huskepunkter || []).forEach((t, i) => out.push({ id: `d${id}-${i}`, txt: t, src: "doc", akt: id, dato: f && f.dato, start: f && f.start }));
+    if (f && myActivity(a)) out.push({ id: `r${id}`, txt: "Læs beskrivelsen igennem", src: "auto", akt: id, dato: f.dato, start: f.start });
+  }
+  for (const o of S.todo.own) { const f = o.akt && first[o.akt]; out.push({ id: o.id, txt: o.txt, src: "egen", akt: o.akt || "", dato: f ? f.dato : null, start: f ? f.start : null }); }
+  return out;
+}
+function viewHusk() {
+  const today = ymd(now()), all = todoItems(), hiddenN = all.filter(i => S.todo.hidden[i.id]).length;
+  let items = all.filter(i => !S.todo.hidden[i.id]);
+  if (S.todoTab === "idag") items = items.filter(i => !i.dato || i.dato === today);
+  if (S.todoTab === "egne") items = items.filter(i => i.src === "egen");
+  const done = items.filter(i => S.todo.done[i.id]).length, pct = items.length ? (done / items.length) * 100 : 0;
+  const groups = new Map();
+  for (const i of items) { const k = i.akt ? `${i.dato || ""} ${i.start || ""} ${i.akt}` : "~"; (groups.get(k) || groups.set(k, []).get(k)).push(i); }
+  let h = `<div class="top"><div><h1>Huskeliste</h1><div class="sub">${done} af ${items.length} klaret</div></div>${ALIEN}</div>
+    <div class="seg">${[["idag", "I dag"], ["uge", "Hele ugen"], ["egne", "Mine egne"]].map(([k, l]) => `<button data-act="ht:${k}" class="${S.todoTab === k ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="bar"><i style="width:${pct}%;background:var(--ac)"></i></div>`;
+  for (const k of [...groups.keys()].sort()) {
+    const g = groups.get(k), a = g[0].akt && S.data.aktiviteter[g[0].akt];
+    h += `<h2 style="display:flex;gap:8px;align-items:baseline">${g[0].dato ? `<span style="color:var(--now)">${DAYS[dayIdx(g[0].dato)].slice(0, 3)} ${g[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}</h2>`;
+    for (const i of g) h += `<div class="card" style="padding-left:12px;display:flex;align-items:center;gap:10px"><button data-act="td:${i.id}" aria-label="Afkryds" class="cb ${S.todo.done[i.id] ? "on" : ""}">${S.todo.done[i.id] ? "✓" : ""}</button>
+      <div style="flex:1;${S.todo.done[i.id] ? "opacity:.5;text-decoration:line-through" : ""}">${esc(i.txt)} ${i.src === "egen" ? '<span class="chip">egen</span>' : i.src === "doc" ? '<span class="chip dim">fra beskrivelsen</span>' : ""}</div>
+      <button data-act="tdel:${i.id}" aria-label="Slet" style="color:var(--mu);padding:6px 8px;font-size:16px">✕</button></div>`;
+  }
+  if (!items.length) h += `<div class="box muted">Ingen punkter her endnu.</div>`;
+  h += `<button class="fold" data-act="tadd">+ Tilføj punkt</button>`;
+  if (hiddenN) h += `<button class="fold" data-act="trestore" style="border-style:solid">Gendan slettede (${hiddenN})</button>`;
+  return h;
+}
+function openAddTodo() {
+  const acts = Object.values(S.data.aktiviteter).sort((x, y) => parseFloat(x.id) - parseFloat(y.id));
+  const bg = document.createElement("div"); bg.className = "sheetbg";
+  bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">Nyt punkt</h1><div class="field"><label>Hvad skal du huske?</label><textarea id="tt" autofocus></textarea></div>
+    <div class="field"><label>Hører til</label><select id="ta"><option value="">Generelt</option>${acts.map(a => `<option value="${a.id}">${esc(a.id + " · " + a.titel.split(" (")[0])}</option>`).join("")}</select></div>
+    <div class="row2"><button class="btn alt" data-x="close">Annullér</button><button class="btn" data-x="save">Tilføj</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener("click", ev => {
+    const x = ev.target.dataset.x;
+    if (ev.target === bg || x === "close") return bg.remove();
+    if (x === "save") {
+      const txt = bg.querySelector("#tt").value.trim(); if (!txt) return;
+      S.todo.own.push({ id: "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), txt, akt: bg.querySelector("#ta").value });
+      saveTodo(); bg.remove(); S.todoTab = S.todoTab === "egne" ? "egne" : S.todoTab; render();
+    }
+  });
+}
+function viewOnb() {
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
+  const alienBig = ALIEN.replace('class="alien"', 'class="alien" style="width:70px;height:70px"');
+  if (S.onb === 1) {
+    const code = S.pw ? S.pw.replace(/(.{4})/g, "$1-").replace(/-$/, "") : "";
+    const how = ios ? `<ol><li>Åbn denne side i <b>Safari</b> (ikke i en chat-app).</li><li>Tryk på <b>Del</b>-ikonet (firkant med pil op).</li><li>Vælg <b>Føj til hjemmeskærm</b>, og tryk <b>Tilføj</b>.</li><li>Åbn <b>Lommeplan</b> fra hjemmeskærmen.</li></ol>`
+      : android ? `${S.installEv ? '<button class="btn" data-act="install">Installér Lommeplan</button>' : ""}<ol><li>Tryk på <b>⋮</b> øverst i Chrome.</li><li>Vælg <b>Installer app</b> eller <b>Føj til startskærm</b>.</li><li>Åbn <b>Lommeplan</b> fra startskærmen.</li></ol>`
+      : `<ol><li>Åbn linket på din telefon.</li><li>Brug browserens menu til at føje siden til hjemmeskærmen.</li></ol>`;
+    return `<div class="login" style="padding-top:6vh">${alienBig}<h1>Velkommen til Lommeplan</h1><div class="sub">Trin 1 af 2 · Føj til hjemmeskærm</div>
+      <div class="box prose" style="text-align:left;margin-top:22px">${how}${code ? `<p class="muted">Første gang du åbner fra hjemmeskærmen, skal du skrive koden igen:</p><div class="box" style="text-align:center;font-weight:800;font-size:20px;letter-spacing:.08em">${esc(code)}</div><button class="btn alt" data-act="copy">Kopiér koden</button>` : ""}</div>
+      <button class="btn" data-act="onb:2">Næste</button><button class="btn ghost" data-act="onb:2">Spring over</button></div>`;
+  }
+  return `<div class="login" style="padding-top:6vh">${alienBig}<h1>Hvem er du?</h1><div class="sub">Trin 2 af 2 · Så kan appen vise dine aktiviteter</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:22px">${S.data.personer.map(n => `<button class="pill" style="padding:12px;font-size:15px;color:var(--tx)" data-act="pick:${esc(n)}">${esc(n)}</button>`).join("")}</div></div>`;
+}
+
 function viewLogin() {
   return `<div class="login">${ALIEN.replace('class="alien"', 'class="alien" style="width:90px;height:90px"')}<h1 style="font-size:30px">Lommeplan</h1><div class="sub">PLanstar 2026 · for teamere</div>
     <form id="lf"><div class="field" style="margin-top:40px;text-align:left"><label>Din kode</label><input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></div>
     <div class="err">${esc(S.loginErr)}</div><button class="btn" type="submit">Åbn</button></form>
-    <p class="muted">Brug det personlige link, du har fået. Virker det ikke, så skriv koden her. Koden gemmes kun på din telefon.</p></div>`;
+    <p class="muted">Brug linket eller koden, du har fået af teamet. Koden gemmes kun på din telefon.</p></div>`;
 }
 
 // ---------- rediger ----------
@@ -294,6 +354,7 @@ function scrollToNow() {
 }
 // ---------- router + events ----------
 function render() {
+  if (S.data && S.onb) { $app.innerHTML = viewOnb(); return; }
   if (!S.data) { $app.innerHTML = S.loading ? '<p class="muted" style="padding-top:30vh;text-align:center">Henter plan …</p>' : viewLogin(); bindLogin(); return; }
   const [r = "uge", a, b] = location.hash.replace(/^#\/?/, "").split("/");
   let h, tab = r;
@@ -301,6 +362,7 @@ function render() {
   else if (r === "e") { h = viewEvent(a); tab = "uge"; }
   else if (r === "uge") h = viewUge(a);
   else if (r === "mine") h = viewMine();
+  else if (r === "husk") { h = viewHusk(); tab = "husk"; }
   else { h = viewUge(a); tab = "uge"; }
   $app.innerHTML = h + nav(tab);
 }
@@ -308,13 +370,16 @@ function bindLogin() {
   const f = document.getElementById("lf"); if (!f) return;
   f.onsubmit = async ev => { ev.preventDefault(); S.loginErr = ""; await tryUnlock(document.getElementById("code").value); };
 }
-async function tryUnlock(code) {
-  let u = null; try { u = await unlockWithCode(S.env, code); } catch {}
-  if (!u) { S.loginErr = "Ukendt kode. Tjek, at den er skrevet rigtigt."; render(); return false; }
-  if (Date.now() > Date.parse(u.exp)) { S.loginErr = "Adgangen er udløbet."; render(); return false; }
-  ls.set("lp_key", u.k); ls.set("lp_name", u.name); ls.set("lp_exp", u.exp);
-  S.me = u.name; S.exp = u.exp;
-  S.data = await decryptData(S.env, u.k);
+async function tryUnlock(pw) {
+  if (normPw(pw).length < 8) { S.loginErr = "Koden er for kort."; render(); return false; }
+  let k, d = null;
+  try { k = await deriveKeyB64(S.env, pw); d = await decryptData(S.env, k); } catch {}
+  if (!d) { S.loginErr = "Forkert kode. Tjek, at den er skrevet rigtigt."; render(); return false; }
+  if (Date.now() > Date.parse(d.exp)) { S.loginErr = "Adgangen er udløbet."; render(); return false; }
+  ls.set("lp_key", k); ls.set("lp_exp", d.exp);
+  S.data = d; S.exp = d.exp; S.pw = normPw(pw); S.me = ls.get("lp_name") || null;
+  S.onb = ls.get("lp_onb") === "1" ? 0 : standalone() ? 2 : 1;
+  if (S.onb === 2 && S.me) { S.onb = 0; ls.set("lp_onb", "1"); }
   location.hash = "#/uge"; render(); scrollToNow(); return true;
 }
 document.addEventListener("click", ev => {
@@ -323,6 +388,16 @@ document.addEventListener("click", ev => {
   if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
   else if (act === "mine") { S.mine = !S.mine; ls.set("lp_mine", S.mine ? "1" : "0"); }
   else if (act === "expand") S.expand = !S.expand;
+  else if (act === "ht") S.todoTab = p[0];
+  else if (act === "td") { const id = p.join(":"); S.todo.done[id] ? delete S.todo.done[id] : (S.todo.done[id] = 1); saveTodo(); }
+  else if (act === "tdel") { const id = p.join(":"), i = S.todo.own.findIndex(o => o.id === id); if (i >= 0) S.todo.own.splice(i, 1); else S.todo.hidden[id] = 1; delete S.todo.done[id]; saveTodo(); }
+  else if (act === "trestore") { S.todo.hidden = {}; saveTodo(); }
+  else if (act === "tadd") return openAddTodo();
+  else if (act === "guide") { S.onb = standalone() ? 2 : 1; }
+  else if (act === "onb") { S.onb = +p[0]; if (S.onb === 2 && S.me) { S.onb = 0; ls.set("lp_onb", "1"); location.hash = "#/uge"; } }
+  else if (act === "pick") { S.me = p.join(":"); ls.set("lp_name", S.me); S.onb = 0; ls.set("lp_onb", "1"); location.hash = "#/uge"; }
+  else if (act === "install") { if (S.installEv) { S.installEv.prompt(); S.installEv = null; } }
+  else if (act === "copy") { try { navigator.clipboard.writeText(S.pw); el.textContent = "Kopieret ✓"; } catch {} return; }
   else if (act === "day") { location.hash = "#/uge/" + p[0]; return; }
   else if (act === "edit") return openEdit(p[0], p.slice(1).join(":"));
   else if (act === "cal") {
@@ -335,7 +410,7 @@ document.addEventListener("click", ev => {
   else if (act === "exp") return saveFile("lommeplan-rettelser.json", JSON.stringify(S.over, null, 1), "application/json", true);
   else if (act === "resetall") { if (confirm("Nulstil alle dine rettelser?")) { S.over = {}; saveOver(); } }
   else if (act === "demooff") { S.demo = null; ls.del("lp_demo"); }
-  else if (act === "logout") { if (confirm("Glem nøglen? Du skal bruge dit link eller din kode igen.")) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.data = null; S.me = null; } }
+  else if (act === "logout") { if (confirm("Glem nøglen? Du skal bruge dit link eller din kode igen.")) { ["lp_key", "lp_name", "lp_exp", "lp_onb"].forEach(ls.del); S.data = null; S.me = null; S.onb = 0; } }
   render();
 });
 document.addEventListener("change", ev => {
@@ -355,6 +430,7 @@ window.addEventListener("hashchange", () => { S.expand = false; render(); window
 setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 60000);
 
 // ---------- start ----------
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.installEv = e; if (S.onb === 1) render(); });
 (async function boot() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   const qd = new URLSearchParams(location.search).get("demo"); if (qd) S.demo = qd;
@@ -369,7 +445,8 @@ setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo
   }
   const key = ls.get("lp_key"), exp = ls.get("lp_exp");
   if (key && (!exp || Date.now() < Date.parse(exp))) {
-    try { S.data = await decryptData(S.env, key); S.me = ls.get("lp_name") || null; S.exp = exp; } catch { ls.del("lp_key"); S.loginErr = "Planen er opdateret med ny nøgle. Brug dit link igen."; }
+    try { S.data = await decryptData(S.env, key); S.me = ls.get("lp_name") || null; S.exp = exp; S.onb = ls.get("lp_onb") === "1" ? 0 : (S.me || standalone() ? (S.me ? 0 : 2) : 1); }
+    catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
   render(); scrollToNow();
