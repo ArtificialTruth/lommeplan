@@ -105,7 +105,7 @@ function evCard(e, o = {}) {
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
 const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
-const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["mine", "★", "Mine"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
+const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
 function viewUge(arg) {
@@ -174,7 +174,7 @@ function viewEvent(id) {
 function viewMine() {
   const calEv = calSelect(), keys = [...new Map(allEvents().map(e => [actKey(e), e.aktivitet ? (S.data.aktiviteter[e.aktivitet] || {}).titel || e.titel : e.titel])).entries()];
   const nOver = Object.keys(S.over).length;
-  let h = `<div class="top"><div><h1>Mine</h1><div class="sub">${S.me ? "Hej " + esc(S.me) : "Vælg dit navn"}</div></div>${ALIEN}</div>
+  let h = `<div class="top"><div><h1>Mig</h1><div class="sub">${S.me ? "Hej " + esc(S.me) : "Vælg dit navn"}</div></div>${ALIEN}</div>
     <h2>Jeg er</h2><select data-act="me">${["", ...S.data.personer].map(n => `<option ${n === (S.me || "") ? "selected" : ""} value="${esc(n)}">${n ? esc(n) : "– vælg navn –"}</option>`).join("")}</select>
     <h2>Føj til kalender</h2><div class="box">
     <div class="field"><label>Målgruppe</label><div class="seg" style="margin:0">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="cal:aud:${k}" class="${S.cal.aud === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
