@@ -105,38 +105,12 @@ function evCard(e, o = {}) {
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
 const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
-const nav = r => `<nav class="bar2"><div class="in">${[["nu", "◉", "Nu"], ["uge", "▤", "Uge"], ["mine", "★", "Mine"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
+const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["mine", "★", "Mine"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
-function viewNu() {
-  const n = now(), today = ymd(n);
-  let date = today, banner = "";
-  if (dayIdx(today) < 0) {
-    if (today < DATES[0]) { date = DATES[0]; banner = `Ugen starter ${DAYS[0].toLowerCase()} ${fmtD(DATES[0])}`; }
-    else date = null;
-  }
-  const head = `<div class="top"><div><h1>${date ? DAYS[dayIdx(date)] + " · " + fmtD(date) : "Lommeplan"}</h1><div class="sub">${banner || (date ? `Dag ${dayIdx(date) + 1} af 6 · PLanstar 2026` : "PLanstar 2026")}</div></div>${ALIEN}</div>${audSeg()}${minePill()}`;
-  if (!date) return head + `<div class="box">Ugen er slut. Tak for i år!</div><a class="btn alt" href="#/uge">Se hele ugen</a>`;
-  const ev = dayEvents(date).map(e => ({ e, st: banner ? "future" : status(e) }));
-  const nowL = ev.filter(x => x.st === "now"), fut = ev.filter(x => x.st === "future"), past = ev.filter(x => x.st === "past");
-  const minStart = fut.length ? fut.reduce((m, x) => (x.e.start < m ? x.e.start : m), "99:99") : null;
-  const next = fut.filter(x => x.e.start === minStart), rest = fut.filter(x => x.e.start !== minStart);
-  let h = head;
-  if (nowL.length) h += `<h2 class="now">Nu</h2>` + nowL.map((x, i) => evCard(x.e, { big: i === 0, bar: i === 0, status: "now" })).join("");
-  else if (!banner) h += `<div class="box muted">Ingen aktivitet lige nu.</div>`;
-  if (next.length) h += `<h2 class="next">Næste</h2>` + next.map(x => evCard(x.e, { status: "future" })).join("");
-  if (rest.length) h += `<h2>Resten af dagen</h2>` + rest.map(x => evCard(x.e, { status: "future" })).join("");
-  if (!nowL.length && !fut.length) h += `<div class="box muted">Dagens program er slut.</div>`;
-  if (past.length) {
-    h += S.showPast ? `<h2>Færdige (${past.length})</h2>` + past.map(x => evCard(x.e, { status: "past" })).join("") + `<button class="fold" data-act="past">Skjul færdige</button>`
-      : `<button class="fold" data-act="past">▸ Færdige (${past.length}) – ${past.slice(0, 3).map(x => esc(x.e.titel.split(" (")[0])).join(", ")}${past.length > 3 ? " …" : ""}</button>`;
-  }
-  return h;
-}
-
 function viewUge(arg) {
   const today = ymd(now());
-  let i = arg !== undefined && arg !== "" ? +arg : Math.max(0, dayIdx(today));
+  let i = arg !== undefined && arg !== "" ? +arg : today > DATES[5] ? 5 : Math.max(0, dayIdx(today));
   if (!(i >= 0 && i < 6)) i = 0;
   const date = DATES[i], ev = dayEvents(date), two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
   let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
@@ -159,7 +133,7 @@ function viewUge(arg) {
 
 function viewAct(id, tab) {
   const a = actFull(id);
-  if (!a) return `<a href="#/nu">‹ Tilbage</a><p>Aktiviteten findes ikke.</p>`;
+  if (!a) return `<a href="#/uge">‹ Tilbage</a><p>Aktiviteten findes ikke.</p>`;
   tab = tab || "resume";
   const evs = allEvents().filter(e => e.aktivitet === id);
   const doc = S.data.events.find(e => e.aktivitet === id && e.docUrl);
@@ -189,7 +163,7 @@ function viewAct(id, tab) {
 
 function viewEvent(id) {
   const e = allEvents().find(x => x.id === id);
-  if (!e) return `<a href="#/nu">‹ Tilbage</a><p>Ikke fundet.</p>`;
+  if (!e) return `<a href="#/uge">‹ Tilbage</a><p>Ikke fundet.</p>`;
   return `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a><button class="pill on" data-act="edit:e:${id}" style="color:var(--tx);border-color:var(--line)">✎ Ret</button></div>
     <h1 style="margin-top:14px">${esc(e.titel)} ${e.rettet ? '<span class="chip edit">rettet</span>' : ""}</h1>
     <div class="meta"><div>🕒 ${DAYS[dayIdx(e.dato)]} ${fmtD(e.dato)} · ${e.start}–${e.slut}</div><div>👥 ${e.maalgruppe === "team" ? "Team" : "Kursister"}</div></div>
@@ -314,16 +288,20 @@ function saveFile(name, text, type, share) {
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+function scrollToNow() {
+  const el = document.querySelector(".grid .card.now") || [...document.querySelectorAll(".grid .card:not(.past)")][0];
+  if (el && document.querySelector(".days .today.on")) el.scrollIntoView({ block: "center" });
+}
 // ---------- router + events ----------
 function render() {
   if (!S.data) { $app.innerHTML = S.loading ? '<p class="muted" style="padding-top:30vh;text-align:center">Henter plan …</p>' : viewLogin(); bindLogin(); return; }
-  const [r = "nu", a, b] = location.hash.replace(/^#\/?/, "").split("/");
+  const [r = "uge", a, b] = location.hash.replace(/^#\/?/, "").split("/");
   let h, tab = r;
   if (r === "a") { h = viewAct(a, b); tab = "uge"; }
   else if (r === "e") { h = viewEvent(a); tab = "uge"; }
   else if (r === "uge") h = viewUge(a);
   else if (r === "mine") h = viewMine();
-  else { h = viewNu(); tab = "nu"; }
+  else { h = viewUge(a); tab = "uge"; }
   $app.innerHTML = h + nav(tab);
 }
 function bindLogin() {
@@ -337,14 +315,13 @@ async function tryUnlock(code) {
   ls.set("lp_key", u.k); ls.set("lp_name", u.name); ls.set("lp_exp", u.exp);
   S.me = u.name; S.exp = u.exp;
   S.data = await decryptData(S.env, u.k);
-  location.hash = "#/nu"; render(); return true;
+  location.hash = "#/uge"; render(); scrollToNow(); return true;
 }
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-act]"); if (!el || el.tagName === "INPUT" || el.tagName === "SELECT") return;
   const [act, ...p] = el.dataset.act.split(":");
   if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
   else if (act === "mine") { S.mine = !S.mine; ls.set("lp_mine", S.mine ? "1" : "0"); }
-  else if (act === "past") S.showPast = !S.showPast;
   else if (act === "expand") S.expand = !S.expand;
   else if (act === "day") { location.hash = "#/uge/" + p[0]; return; }
   else if (act === "edit") return openEdit(p[0], p.slice(1).join(":"));
@@ -374,8 +351,8 @@ document.addEventListener("change", ev => {
   }
   render();
 });
-window.addEventListener("hashchange", () => { S.expand = false; render(); window.scrollTo(0, 0); });
-setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/(nu)?$|^$/.test(location.hash)) render(); }, 60000);
+window.addEventListener("hashchange", () => { S.expand = false; render(); window.scrollTo(0, 0); scrollToNow(); });
+setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 60000);
 
 // ---------- start ----------
 (async function boot() {
@@ -387,13 +364,13 @@ setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo
   S.loading = false;
   const m = location.hash.match(/^#u=([^&]+)/);
   if (m) {
-    history.replaceState(null, "", location.pathname + location.search + "#/nu");
+    history.replaceState(null, "", location.pathname + location.search + "#/uge");
     if (await tryUnlock(m[1])) return;
   }
   const key = ls.get("lp_key"), exp = ls.get("lp_exp");
   if (key && (!exp || Date.now() < Date.parse(exp))) {
     try { S.data = await decryptData(S.env, key); S.me = ls.get("lp_name") || null; S.exp = exp; } catch { ls.del("lp_key"); S.loginErr = "Planen er opdateret med ny nøgle. Brug dit link igen."; }
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
-  if (S.data && !location.hash) location.hash = "#/nu";
-  render();
+  if (S.data && !location.hash) location.hash = "#/uge";
+  render(); scrollToNow();
 })();
