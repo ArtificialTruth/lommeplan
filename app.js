@@ -16,6 +16,7 @@ const S = {
   env: null, data: null, me: null,
   aud: ls.get("lp_aud", "begge"), mine: ls.get("lp_mine") === "1", demo: ls.get("lp_demo") || null,
   over: (() => { try { return JSON.parse(ls.get("lp_over", "{}")); } catch { return {}; } })(),
+  claim: (() => { try { return JSON.parse(ls.get("lp_claim", "{}")); } catch { return {}; } })(),
   showPast: false, expand: false, loginErr: "", onb: 0, pw: "", installEv: null, todoTab: "idag",
   todo: (() => { try { return { done: {}, hidden: {}, own: [], ...JSON.parse(ls.get("lp_todo", "{}")) }; } catch { return { done: {}, hidden: {}, own: [] }; } })(),
   cal: { aud: "begge", mine: false, days: [0, 1, 2, 3, 4, 5], skip: [], alarm: 0 },
@@ -28,6 +29,7 @@ function applyTheme() {
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? "#000000" : "#f2f3f5";
 }
 applyTheme();
+const saveClaim = () => ls.set("lp_claim", JSON.stringify(S.claim));
 const saveTodo = () => ls.set("lp_todo", JSON.stringify(S.todo));
 const standalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 
@@ -59,6 +61,8 @@ function evFull(e) {
   const o = S.over["e:" + e.id] || {};
   return { ...e, start: o.start || e.start, slut: o.slut || e.slut, titel: o.titel || e.titel, note: o.note || "", rettet: !!(o.start || o.slut || o.titel) };
 }
+const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde" };
+function whoIs(n) { const b = n.replace(/\(.*?\)/g, "").trim(); return PALIAS[b.toLowerCase()] || b; }
 function actFull(id) {
   const a = S.data.aktiviteter[id];
   if (!a) return null;
@@ -66,7 +70,12 @@ function actFull(id) {
   return { ...a, sted: o.sted || a.sted, ansvarlig: o.ansvarlig || a.ansvarlig, note: o.note || "", rettet: !!(o.sted || o.ansvarlig) };
 }
 const allEvents = () => S.data.events.map(evFull);
-const isMine = e => { const a = e.aktivitet && S.data.aktiviteter[e.aktivitet]; return !!(a && S.me && (a.bemanding.includes(S.me) || a.ansvarligNavne.includes(S.me))); };
+function mineAct(id) {
+  const a = S.data.aktiviteter[id]; if (!a) return false;
+  const c = S.claim[id]; if (c === 1) return true; if (c === -1) return false;
+  return !!(S.me && (a.bemanding.includes(S.me) || a.ansvarligNavne.includes(S.me)));
+}
+const isMine = e => !!(e.aktivitet && mineAct(e.aktivitet));
 function visible(e) {
   if (S.aud === "kursist" && e.maalgruppe !== "kursist") return false;
   if (S.aud === "team" && e.maalgruppe !== "team") return false;
@@ -89,7 +98,7 @@ function mapsUrl(sted) {
 function evCard(e, o = {}) {
   const st = o.status || status(e), a = actFull(e.aktivitet), mine = isMine(e);
   const href = e.aktivitet ? `#/a/${e.aktivitet}` : `#/e/${e.id}`;
-  const tags = (mine ? '<span class="chip">★ mine</span>' : "") + (e.maalgruppe === "team" && S.aud === "begge" && !o.lane ? '<span class="chip team">T</span>' : "") + (e.rettet ? '<span class="chip edit">rettet</span>' : "");
+  const tags = (st === "now" ? '<span class="rec"><i></i>NU</span>' : "") + (mine ? '<span class="chip">★ mine</span>' : "") + (e.maalgruppe === "team" && S.aud === "begge" && !o.lane ? '<span class="chip team">T</span>' : "") + (e.rettet ? '<span class="chip edit">rettet</span>' : "");
   let extra = "";
   if (o.bar && st === "now") {
     const n = now(), s = at(e.dato, e.start), en = at(e.dato, e.slut);
@@ -99,7 +108,7 @@ function evCard(e, o = {}) {
   return `<a class="card ${e.maalgruppe === "team" ? "team" : ""} ${st} ${o.big ? "big" : ""}" href="${href}">
     <div class="t">${e.start} – ${e.slut}</div><div class="n">${esc(e.titel.split(" (")[0])}</div>${e.titel.includes(" (") ? `<div class="p">${esc(e.titel.slice(e.titel.indexOf(" (") + 2).replace(/\)$/, ""))}</div>` : ""}
     ${a && a.sted && !/^startsted/i.test(a.sted) ? `<div class="p">📍 ${esc(a.sted)}</div>` : ""}${extra}
-    ${tags ? `<div class="tags">${tags}</div>` : ""}</a>`;
+    ${tags ? `<div class="tags">${tags}</div>` : ""}${e.aktivitet ? `<button class="star ${mine ? "on" : ""}" data-act="claim:${e.aktivitet}" aria-label="${mine ? "Fjern fra mine" : "Det er min"}">${mine ? "★" : "☆"}</button>` : ""}</a>`;
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
 const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
@@ -112,16 +121,17 @@ function viewUge(arg) {
   if (!(i >= 0 && i < 6)) i = 0;
   const date = DATES[i], ev = dayEvents(date), two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
   let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
-  h += `<div class="days">${DAYS.map((d, k) => `<button data-act="day:${k}" class="${k === i ? "on" : ""} ${DATES[k] === today ? "today" : ""}">${d.slice(0, 3)}<b>${+DATES[k].slice(8)}</b></button>`).join("")}</div>` + audSeg() + minePill();
+  h += `<div class="days">${DAYS.map((d, k) => `<button data-act="day:${k}" class="${k === i ? "on" : ""} ${DATES[k] === today ? "today" : ""} ${DATES[k] < today ? "gone" : ""}">${d.slice(0, 3)}<b>${+DATES[k].slice(8)}</b></button>`).join("")}</div>` + audSeg() + minePill();
   if (two) h += `<div class="lanehead"><span></span><span class="lh" style="color:var(--act)">KURSIST</span><span class="lh" style="color:var(--teamt)">TEAM<button data-act="aud:kursist" style="color:var(--mu)">✕</button></span></div>`;
   const starts = [...new Set(ev.map(e => e.start))].sort();
   h += `<div class="grid ${two ? "two" : ""}">`;
   for (const s of starts) {
     const rowEv = ev.filter(e => e.start === s), past = rowEv.every(e => status(e) === "past");
-    h += `<div class="tl ${past ? "past" : ""}">${s}</div>`;
+    h += `<div class="tl ${past ? "past" : ""}" data-s="${s}" data-e="${rowEv.reduce((m, e) => (e.slut > m ? e.slut : m), s)}">${s}</div>`;
     if (two) h += `<div>${rowEv.filter(e => e.maalgruppe === "kursist").map(e => evCard(e, { lane: 1 })).join("")}</div><div>${rowEv.filter(e => e.maalgruppe === "team").map(e => evCard(e, { lane: 1 })).join("")}</div>`;
     else h += `<div>${rowEv.map(e => evCard(e)).join("")}</div>`;
   }
+  if (date === today && ev.length) h += `<div class="nowline" id="nowline"><b></b></div>`;
   h += `</div>`;
   if (!ev.length) h += `<div class="box muted">Ingen punkter med disse filtre.</div>`;
   const loose = Object.values(S.data.aktiviteter).filter(a => !S.data.events.some(e => e.aktivitet === a.id));
@@ -141,6 +151,7 @@ function viewAct(id, tab) {
     <h1 style="margin-top:14px">${esc(a.id)} · ${esc(a.titel)} ${a.rettet ? '<span class="chip edit">rettet</span>' : ""}</h1>
     <div class="meta"><div>🕒 ${esc(when)}</div>${a.ansvarlig ? `<div>👤 ${esc(a.ansvarlig)}</div>` : ""}${place ? `<div>📍 ${esc(place)} · <a href="${mapsUrl(place)}" target="_blank" rel="noopener">Åbn i Maps ›</a></div>` : ""}</div>
     <div class="tabs">${[["resume", "Resumé"], ["tid", "Tidsplan"], ["fantasi", "Fantasi"], ["bem", "Bemanding"]].map(([k, l]) => `<a href="#/a/${id}/${k}" class="${tab === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
+  h += `<button class="btn ${mineAct(id) ? "alt" : ""}" data-act="claim:${id}">${mineAct(id) ? "★ Det er min – tryk for at fjerne" : "☆ Det er min"}</button>`;
   if (a.note) h += `<div class="box" style="border:1.5px solid var(--mine)"><h2 style="margin:0 0 6px">Min note</h2>${paras(a.note)}</div>`;
   if (tab === "resume") {
     h += `<h2>Formål</h2><div class="prose">${paras(a.formaal) || '<p class="muted">Ikke beskrevet.</p>'}</div>`;
@@ -151,8 +162,19 @@ function viewAct(id, tab) {
   } else if (tab === "fantasi") {
     h += `<div class="prose">${paras(a.fantasi) || '<p class="muted">Ingen fantasiramme i beskrivelsen.</p>'}</div>`;
   } else {
-    h += `<h2>Ansvarlig</h2><div class="prose"><p>${esc(a.ansvarlig) || "–"}</p></div><h2>Teamere</h2>`;
-    h += a.bemanding.length ? `<div class="names">${a.bemanding.map(n => `<span class="${n === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div>` : `<p class="muted">Ingen bemanding fundet i beskrivelsen.</p>`;
+    h += `<h2>Ansvarlig</h2><div class="prose"><p>${esc(a.ansvarlig) || "–"}</p></div>`;
+    if (a.roller && a.roller.length) {
+      if (a.bemandingTitel) h += `<h2>${esc(a.bemandingTitel)}</h2>`;
+      const mineR = a.roller.filter(r => r.navne.some(n => whoIs(n) === S.me));
+      if (mineR.length) h += `<div class="box" style="border:1.5px solid var(--mine)"><div class="muted">Din rolle</div><b>${mineR.map(r => esc(r.rolle) + " · " + esc(r.post)).join("<br>")}</b></div>`;
+      let last = "";
+      for (const r of a.roller) {
+        if (r.post !== last) { h += `<h2>${esc(r.post)}</h2>`; last = r.post; }
+        h += `<div class="box"><div class="line" style="padding:0"><b>${esc(r.rolle)}</b><span class="muted">${esc(r.antal)} pers.</span></div><div class="names" style="margin-top:8px">${r.navne.map(n => `<span class="${whoIs(n) === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div></div>`;
+      }
+      for (const n of a.bemandingNoter || []) h += `<div class="box muted">📝 ${esc(n)}</div>`;
+    } else h += `<h2>Teamere</h2>`;
+    if (!(a.roller && a.roller.length)) h += a.bemanding.length ? `<div class="names">${a.bemanding.map(n => `<span class="${n === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div>` : `<p class="muted">Ingen bemanding fundet i beskrivelsen.</p>`;
     if (a.bemandingRaa) h += `<details class="box"><summary>Original tekst</summary><div class="prose" style="margin-top:8px">${paras(a.bemandingRaa)}</div></details>`;
   }
   if (doc) h += `<a class="btn ghost" href="${esc(doc.docUrl)}" target="_blank" rel="noopener">🔗 Åbn original i Google Docs</a>`;
@@ -196,7 +218,7 @@ function viewMine() {
   return h;
 }
 
-function myActivity(a) { return !!(S.me && (a.bemanding.includes(S.me) || a.ansvarligNavne.includes(S.me))); }
+function myActivity(a) { return mineAct(a.id); }
 const hashStr = t => Math.abs([...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)).toString(36);
 function todoItems() {
   const evs = allEvents().filter(e => e.aktivitet).sort((x, y) => x.dato.localeCompare(y.dato) || x.start.localeCompare(y.start));
@@ -224,10 +246,12 @@ function viewHusk() {
     <div class="bar"><i style="width:${pct}%;background:var(--ac)"></i></div>`;
   for (const k of [...groups.keys()].sort()) {
     const g0 = groups.get(k), g = g0.filter(i => !S.todo.hidden[i.id]), a = g0[0].akt && S.data.aktiviteter[g0[0].akt];
-    h += `<h2 style="display:flex;gap:8px;align-items:center">${g0[0].dato ? `<span style="color:var(--nowt)">${DAYS[dayIdx(g0[0].dato)].slice(0, 3)} ${g0[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}${a ? `<button class="plus" data-act="tadd:${a.id}" aria-label="Tilføj punkt">+</button>` : ""}</h2>${g.length ? "" : '<div class="muted" style="margin:0 0 8px">Ingen punkter. Tryk + for at tilføje.</div>'}`;
+    const fin = g.length > 0 && g.every(i => S.todo.done[i.id]);
+    h += `<div class="${fin ? "fin" : ""}"><h2 style="display:flex;gap:8px;align-items:center">${g0[0].dato ? `<span style="color:var(--nowt)">${DAYS[dayIdx(g0[0].dato)].slice(0, 3)} ${g0[0].start}</span>` : ""}${a ? `<a href="#/a/${a.id}" style="color:var(--tx);text-decoration:none">${esc(a.titel)}</a>` : "Generelt"}${a ? `<button class="plus" data-act="tadd:${a.id}" aria-label="Tilføj punkt">+</button>` : ""}</h2>${g.length ? "" : '<div class="muted" style="margin:0 0 8px">Ingen punkter. Tryk + for at tilføje.</div>'}`;
     for (const i of g) h += `<div class="card" style="padding-left:12px;display:flex;align-items:center;gap:10px"><button data-act="td:${i.id}" aria-label="Afkryds" class="cb ${S.todo.done[i.id] ? "on" : ""}">${S.todo.done[i.id] ? "✓" : ""}</button>
       <div style="flex:1;${S.todo.done[i.id] ? "opacity:.5;text-decoration:line-through" : ""}">${esc(i.txt)} ${i.src === "egen" ? '<span class="chip">egen</span>' : i.src === "doc" ? '<span class="chip dim">fra beskrivelsen</span>' : ""}</div>
       <button data-act="tdel:${i.id}" aria-label="Slet" style="color:var(--mu);padding:6px 8px;font-size:16px">✕</button></div>`;
+    h += "</div>";
   }
   if (!items.length) h += `<div class="box muted">Ingen punkter her endnu.</div>`;
   h += `<button class="btn" data-act="tadd">+ Tilføj punkt</button>`;
@@ -359,6 +383,22 @@ function saveFile(name, text, type, share) {
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+function updateNowLine() {
+  const ln = document.getElementById("nowline"); if (!ln) return;
+  const grid = ln.parentElement, tls = [...grid.querySelectorAll(".tl")]; if (!tls.length) return;
+  const n = now(), mins = n.getHours() * 60 + n.getMinutes() + n.getSeconds() / 60, sm = t => +t.slice(0, 2) * 60 + +t.slice(3);
+  const pos = tls.map(el => ({ m: sm(el.dataset.s), e: sm(el.dataset.e), y: el.offsetTop }));
+  let y;
+  if (mins <= pos[0].m) y = pos[0].y - 4;
+  else {
+    let i = pos.length - 1; for (let k = 0; k < pos.length - 1; k++) if (mins < pos[k + 1].m) { i = k; break; }
+    const nextY = pos[i + 1] ? pos[i + 1].y : grid.offsetHeight, span = (pos[i + 1] ? pos[i + 1].m : pos[i].e) - pos[i].m;
+    y = pos[i].y + Math.min(1, Math.max(0, (mins - pos[i].m) / (span || 1))) * (nextY - pos[i].y - 6);
+  }
+  ln.style.top = Math.round(y) + "px";
+  ln.firstElementChild.textContent = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
+}
+window.addEventListener("resize", updateNowLine);
 function scrollToNow() {
   const el = document.querySelector(".grid .card.now") || [...document.querySelectorAll(".grid .card:not(.past)")][0];
   if (el && document.querySelector(".days .today.on")) el.scrollIntoView({ block: "center" });
@@ -376,6 +416,7 @@ function render() {
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
   else { h = viewUge(a); tab = "uge"; }
   $app.innerHTML = h + nav(tab);
+  updateNowLine();
 }
 function bindLogin() {
   const f = document.getElementById("lf"); if (!f) return;
@@ -402,7 +443,9 @@ async function tryUnlock(pw) {
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-act]"); if (!el || el.tagName === "INPUT" || el.tagName === "SELECT") return;
   const [act, ...p] = el.dataset.act.split(":");
-  if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
+  if (el.closest("a")) ev.preventDefault();
+  if (act === "claim") { const id = p.join(":"), doc = !!(S.me && S.data.aktiviteter[id] && (S.data.aktiviteter[id].bemanding.includes(S.me) || S.data.aktiviteter[id].ansvarligNavne.includes(S.me))); const now1 = mineAct(id); if (now1) { doc ? (S.claim[id] = -1) : delete S.claim[id]; } else { doc ? delete S.claim[id] : (S.claim[id] = 1); } saveClaim(); }
+  else if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
   else if (act === "mine") { S.mine = !S.mine; ls.set("lp_mine", S.mine ? "1" : "0"); }
   else if (act === "expand") S.expand = !S.expand;
   else if (act === "theme") { ls.set("lp_theme", p[0]); applyTheme(); }
@@ -464,7 +507,7 @@ window.addEventListener("hashchange", () => {
     return;
   }
   S.expand = false; render(); window.scrollTo(0, 0); scrollToNow(); });
-setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 60000);
+setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 30000);
 
 // ---------- start ----------
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.installEv = e; if (S.onb === 1) render(); });

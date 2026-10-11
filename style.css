@@ -79,3 +79,21 @@ nav.bar2 a i{display:block;font-style:normal;font-size:21px;line-height:1.2}nav.
 .box,.meta{box-shadow:var(--shadow)}.sheet{box-shadow:0 -4px 24px rgba(0,0,0,.2)}
 
 .plus{margin-left:auto;flex:none;width:40px;height:40px;border-radius:50%;background:var(--ac);color:#000;font-size:28px;font-weight:700;line-height:1;display:grid;place-items:center;padding:0 0 3px;box-shadow:var(--shadow)}
+
+:root{--rec:#ff3b5c}
+.card.past{opacity:.5;filter:grayscale(1)}.days button.gone{opacity:.55}
+.fin{opacity:.5;filter:grayscale(1)}
+.rec{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;color:var(--rec);background:rgba(255,59,92,.12);padding:2px 8px;border-radius:11px}
+.rec i{width:8px;height:8px;border-radius:50%;background:var(--rec);animation:recdot 1.2s ease-in-out infinite}
+@keyframes recdot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(.7)}}
+@keyframes glow{0%,100%{box-shadow:inset 0 0 0 2px var(--now),0 0 0 0 rgba(255,200,87,.55)}60%{box-shadow:inset 0 0 0 2px var(--now),0 0 0 9px rgba(255,200,87,0)}}
+.card.now{animation:glow 2.2s ease-out infinite}
+.grid{position:relative}.grid>*{position:relative;z-index:1}
+.grid>.nowline{position:absolute;left:0;right:0;height:2px;background:var(--rec);z-index:0;pointer-events:none;transition:top .6s;box-shadow:0 0 8px var(--rec)}
+.nowline b{position:absolute;left:0;top:-9px;font-size:10px;font-weight:800;line-height:16px;background:var(--rec);color:#fff;padding:0 6px;border-radius:8px}
+.star{position:absolute;right:8px;bottom:6px;width:34px;height:34px;font-size:20px;line-height:1;color:var(--mu);border-radius:50%}
+.star.on{color:var(--minet)}
+.card .tags{right:10px}
+@media (prefers-reduced-motion:reduce){.card.now,.rec i{animation:none}.nowline{transition:none}}
+
+.grid .card,.card{padding-right:44px}.card .tags{right:8px}
