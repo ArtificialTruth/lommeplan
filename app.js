@@ -485,7 +485,7 @@ function myPatrolName() {
   return p ? p.navn : null;
 }
 const patrolDot = (c, s = 28) => `<i style="display:inline-block;width:${s}px;height:${s}px;border-radius:${Math.round(s / 4)}px;background:${c};${c === "#ffffff" ? "box-shadow:inset 0 0 0 1.5px var(--line)" : ""};flex:none"></i>`;
-function viewPatruljer(sub) {
+function viewPatruljer(sub, hi) {
   sub = sub || "liste";
   const P = S.data.patruljer || [], my = myPatrolName(), mp = P.find(p => p.navn === my);
   let h = `<div class="top"><div><h1>Patruljer</h1><div class="sub">${P.length} patruljer · ${P.reduce((n, p) => n + p.vejledere.length, 0)} vejledere</div></div>${ALIEN}</div>
@@ -495,10 +495,12 @@ function viewPatruljer(sub) {
     return h + viewPL("pl");
   }
   if (sub === "team") {
+    if (hi) S.teamQ = "";
+    hi = hi ? decodeURIComponent(hi) : "";
     const q = (S.teamQ || "").toLowerCase(), col = n => { const pp = P.find(p => p.vejledere.some(v => whoIs(v) === n)); return pp ? patrolDot(pp.farve, 18) : '<i style="width:18px"></i>'; };
     h += `<input id="tq" placeholder="Søg teamer …" value="${esc(S.teamQ || "")}" style="margin:4px 0 10px">`;
     const list = [...S.data.personer].sort((a, b) => a.localeCompare(b, "da")).filter(n => !q || n.toLowerCase().includes(q));
-    h += list.map(n => { const t = (S.data.telefon || {})[n]; return `<div class="card" style="display:flex;align-items:center;gap:10px;padding-left:16px">${col(n)}<div style="flex:1"><div class="n">${esc(n)}${n === S.me ? ' <span class="chip">dig</span>' : ""}</div><div class="p">${t ? esc(t) : "Intet nummer endnu"}</div></div>${t ? `<a class="pill on" href="tel:${esc(t)}" style="text-decoration:none;color:var(--tx)">Ring</a><a class="pill on" href="sms:${esc(t)}" style="text-decoration:none;color:var(--tx)">SMS</a>` : ""}</div>`; }).join("") || '<div class="box muted">Ingen teamere fundet.</div>';
+    h += list.map(n => { const t = (S.data.telefon || {})[n]; return `<div class="card ${n === hi ? "hi" : ""}" style="display:flex;align-items:center;gap:10px;padding-left:16px">${col(n)}<div style="flex:1"><div class="n">${esc(n)}${n === S.me ? ' <span class="chip">dig</span>' : ""}</div><div class="p">${t ? esc(t) : "Intet nummer endnu"}</div></div>${t ? `<a class="pill on" href="tel:${esc(t)}" style="text-decoration:none;color:var(--tx)">Ring</a><a class="pill on" href="sms:${esc(t)}" style="text-decoration:none;color:var(--tx)">SMS</a>` : ""}</div>`; }).join("") || '<div class="box muted">Ingen teamere fundet.</div>';
     return h;
   }
   if (sub === "lejr") {
@@ -525,7 +527,7 @@ function openPerson(name) {
   document.body.appendChild(bg);
   bg.addEventListener("click", ev => { const x = ev.target.dataset.x; if (ev.target === bg || x === "close") bg.remove(); if (x === "copy") { try { navigator.clipboard.writeText(t); ev.target.textContent = "Kopieret ✓"; } catch {} } });
 }
-const personChip = n => phoneOf(n) ? `<button class="${whoIs(n) === S.me ? "me" : ""}" data-act="person:${esc(n)}" style="padding:5px 11px;border-radius:14px;background:var(--card2);font-size:13px">${esc(n)} 📞</button>` : `<span class="${whoIs(n) === S.me ? "me" : ""}">${esc(n)}</span>`;
+const personChip = n => { const w = whoIs(n), me = w === S.me ? "me" : ""; return S.data.personer.includes(w) ? `<a class="${me}" href="#/patruljer/team/${encodeURIComponent(w)}" style="padding:5px 11px;border-radius:14px;background:var(--card2);font-size:13px;color:var(--tx);text-decoration:none">${esc(n)}</a>` : `<span class="${me}">${esc(n)}</span>`; };
 function openKort() {
   const bg = document.createElement("div"); bg.className = "sheetbg"; bg.style.alignItems = "stretch";
   bg.innerHTML = `<div style="background:var(--bg);width:100%;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top))"><b>Lejrpladser og PT-steder</b><button class="pill on" data-x="close" style="color:var(--tx)">Luk ✕</button></div><div style="overflow:auto;flex:1;-webkit-overflow-scrolling:touch"><img src="${S.data.lejrkort}" style="width:220%;max-width:none;display:block;background:#fff"></div></div>`;
@@ -651,10 +653,11 @@ function render() {
   else if (r === "uge") h = viewUge(a);
   else if (r === "mine") h = viewMine();
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
-  else if (r === "patruljer") { h = viewPatruljer(a); tab = "patruljer"; }
+  else if (r === "patruljer") { h = viewPatruljer(a, b); tab = "patruljer"; }
   else { h = viewUge(a); tab = "uge"; }
   $app.innerHTML = h + nav(tab);
   updateNowLine(); bindPlDrag();
+  const hiEl = document.querySelector(".card.hi"); if (hiEl) setTimeout(() => hiEl.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
 }
 function bindLogin() {
   const f = document.getElementById("lf"); if (!f) return;
