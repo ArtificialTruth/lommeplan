@@ -61,7 +61,7 @@ function evFull(e) {
   const o = S.over["e:" + e.id] || {};
   return { ...e, start: o.start || e.start, slut: o.slut || e.slut, titel: o.titel || e.titel, note: o.note || "", rettet: !!(o.start || o.slut || o.titel) };
 }
-const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde" };
+const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde", "marie e": "Marie", alsa: "Asla" };
 function whoIs(n) { const b = n.replace(/\(.*?\)/g, "").trim(); return PALIAS[b.toLowerCase()] || b; }
 function actFull(id) {
   const a = S.data.aktiviteter[id];
@@ -166,11 +166,11 @@ function viewAct(id, tab) {
     if (a.roller && a.roller.length) {
       if (a.bemandingTitel) h += `<h2>${esc(a.bemandingTitel)}</h2>`;
       const mineR = a.roller.filter(r => r.navne.some(n => whoIs(n) === S.me));
-      if (mineR.length) h += `<div class="box" style="border:1.5px solid var(--mine)"><div class="muted">Din rolle</div><b>${mineR.map(r => esc(r.rolle) + " · " + esc(r.post)).join("<br>")}</b></div>`;
+      if (mineR.length) h += `<div class="box" style="border:1.5px solid var(--mine)"><div class="muted">Din rolle</div><b>${mineR.map(r => esc(r.rolle) + (r.post ? " · " + esc(r.post) : "")).join("<br>")}</b></div>`;
       let last = "";
       for (const r of a.roller) {
-        if (r.post !== last) { h += `<h2>${esc(r.post)}</h2>`; last = r.post; }
-        h += `<div class="box"><div class="line" style="padding:0"><b>${esc(r.rolle)}</b><span class="muted">${esc(r.antal)} pers.</span></div><div class="names" style="margin-top:8px">${r.navne.map(n => `<span class="${whoIs(n) === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div></div>`;
+        if (r.post !== last) { if (r.post) h += `<h2>${esc(r.post)}</h2>`; last = r.post; }
+        h += `<div class="box"><div class="line" style="padding:0;align-items:flex-start"><b>${esc(r.rolle)}</b><span class="muted" style="text-align:right;flex:none">${r.tid ? esc(r.tid) + "<br>" : ""}${r.antal ? esc(r.antal) + " pers." : ""}</span></div>${r.navne.length ? `<div class="names" style="margin-top:8px">${r.navne.map(n => `<span class="${whoIs(n) === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div>` : '<div class="muted" style="margin-top:6px">Ingen navne endnu</div>'}${r.note ? `<div class="muted" style="margin-top:8px">📝 ${esc(r.note)}</div>` : ""}</div>`;
       }
       for (const n of a.bemandingNoter || []) h += `<div class="box muted">📝 ${esc(n)}</div>`;
     } else h += `<h2>Teamere</h2>`;
