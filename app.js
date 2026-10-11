@@ -106,6 +106,7 @@ function status(e) {
   if (at(e.dato, e.start) <= n) return "now";
   return "future";
 }
+const offSite = sted => /hillerød|helsinge|gribsø|gribskov|station|tog\b|skov/i.test(sted || "");
 function mapsUrl(sted) {
   const q = /hillerød|helsinge|gribsø|gribskov/i.test(sted || "") ? sted : HOME;
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
@@ -204,7 +205,7 @@ function viewAct(id, tab) {
   const place = a.sted && !/^startsted/i.test(a.sted) ? a.sted : "";
   let h = `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a><button class="pill on" data-act="edit:a:${id}" style="color:var(--tx);border-color:var(--line)">✎ Ret</button></div>
     <h1 style="margin-top:14px">${esc(a.id)} · ${esc(a.titel)} ${a.rettet ? '<span class="chip edit">rettet</span>' : ""}</h1>
-    <div class="meta"><div>🕒 ${esc(when)}</div>${a.ansvarlig ? `<div>👤 ${esc(a.ansvarlig)}</div>` : ""}${place ? `<div>📍 ${esc(place)} · <a href="${mapsUrl(place)}" target="_blank" rel="noopener">Åbn i Maps ›</a></div>` : ""}</div>
+    <div class="meta"><div>🕒 ${esc(when)}</div>${a.ansvarlig ? `<div>👤 ${esc(a.ansvarlig)}</div>` : ""}${place ? `<div>📍 ${esc(place)} · ${offSite(place) ? `<a href="${mapsUrl(place)}" target="_blank" rel="noopener">Åbn i Maps ›</a>` : `<a href="#/patruljer/lejr">Se lejrkort ›</a>`}</div>` : ""}</div>
     <div class="tabs">${[["resume", "Resumé"], ["tid", "Tidsplan"], ...(hasPl ? [["pl", "PL-plan"]] : []), ["fantasi", "Fantasi"], ["bem", "Bemanding"]].map(([k, l]) => `<a href="#/a/${id}/${k}" class="${tab === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
   h += `<button class="btn ${mineAct(id) ? "alt" : ""}" data-act="claim:${id}">${mineAct(id) ? "★ Det er min – tryk for at fjerne" : "☆ Det er min"}</button>`;
   if (a.note) h += `<div class="box" style="border:1.5px solid var(--mine)"><h2 style="margin:0 0 6px">Min note</h2>${paras(a.note)}</div>`;
