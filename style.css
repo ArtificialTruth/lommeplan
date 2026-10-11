@@ -107,3 +107,4 @@ nav.bar2 a i{display:block;font-style:normal;font-size:21px;line-height:1.2}nav.
 .ovleg .k{background:var(--ac)}.ovleg .t{background:var(--team);width:5px}.ovleg .m{background:var(--mine);border-radius:50%;width:8px}.ovleg .n{background:var(--now);outline:1px solid var(--rec)}.ovleg .p{background:var(--ac);opacity:.35}
 
 .plsvg.edit{touch-action:none}.plsvg [data-h]{cursor:ns-resize}.plrow input{padding:8px 10px}.drag{user-select:none}
+.card.hid{opacity:.45;border:1.5px dashed var(--mu)}.hidebtn{font-size:16px;font-weight:800}
