@@ -66,7 +66,7 @@ function evFull(e) {
   const o = S.over["e:" + e.id] || {};
   return { ...e, start: o.start || e.start, slut: o.slut || e.slut, titel: o.titel || e.titel, note: o.note || "", rettet: !!(o.start || o.slut || o.titel) };
 }
-const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde", "marie e": "Marie", "marie b": "Marie", alsa: "Asla", havbro: "Mads" };
+const PALIAS = { bondo: "Bondo", marie: "Bondo", "marie b": "Bondo", "marie e": "Bondo", mads: "Havbro", havbro: "Havbro", mathilde: "Mathilde G", "mathilde m": "Mathilde G", "mathilde g": "Mathilde G", alsa: "Asla" };
 function whoIs(n) { const b = n.replace(/\(.*?\)/g, "").trim(); return PALIAS[b.toLowerCase()] || b; }
 function actFull(id) {
   const a = S.data.aktiviteter[id];
@@ -798,7 +798,7 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
   }
   const key = ls.get("lp_key"), exp = ls.get("lp_exp");
   if (key && (!exp || Date.now() < Date.parse(exp))) {
-    try { S.data = await decryptData(S.env, key); S.me = ls.get("lp_name") || null; S.exp = exp; S.onb = ls.get("lp_onb") === "1" ? 0 : (S.me || standalone() ? (S.me ? 0 : 2) : 1); }
+    try { S.data = await decryptData(S.env, key); S.me = ls.get("lp_name") || null; { const M = { Marie: "Bondo", Mads: "Havbro", Mathilde: "Mathilde G" }; if (S.me && M[S.me]) { S.me = M[S.me]; ls.set("lp_name", S.me); } } S.exp = exp; S.onb = ls.get("lp_onb") === "1" ? 0 : (S.me || standalone() ? (S.me ? 0 : 2) : 1); }
     catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
