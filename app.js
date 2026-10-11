@@ -356,20 +356,29 @@ function plState() {
   const n = now(), nm = n.getHours() * 60 + n.getMinutes(), di = dayIdx(ymd(n));
   const abs = (d, t) => d * 1440 + mm(t), cur = (di >= 0 ? di : n < at(DATES[0], "00:00") ? -1 : 6) * 1440 + nm;
   const segs = plTpl().slice().sort((a, b) => abs(a.dag, a.from) - abs(b.dag, b.from));
+  const pls = segs.filter(s => s.slot !== SK), shifts = S.pl.shifts || {};
   const inSeg = s => abs(s.dag, s.from) <= cur && cur < abs(s.dag, s.to);
-  const pl = segs.find(s => s.slot !== SK && inSeg(s)), sk = segs.find(s => s.slot === SK && inSeg(s));
-  const pls = segs.filter(s => s.slot !== SK);
-  const nextSeg = pls.find(s => abs(s.dag, s.from) > cur && (!pl || s.slot !== pl.slot));
-  let from = null, to = null;
-  if (sk) { from = [...pls].reverse().find(s => abs(s.dag, s.to) <= abs(sk.dag, sk.from) + 1); to = pls.find(s => abs(s.dag, s.from) >= abs(sk.dag, sk.to) - 1); }
-  return { pl, sk, nextSeg, from, to, cur, abs, segs };
+  const pair = sk => ({ from: [...pls].reverse().find(s => abs(s.dag, s.to) <= abs(sk.dag, sk.from) + 1), to: pls.find(s => abs(s.dag, s.from) >= abs(sk.dag, sk.to) - 1) });
+  const outgoing = new Set();
+  for (const k of segs.filter(s => s.slot === SK)) if (shifts[k.id] && abs(k.dag, k.from) <= cur) { const pr = pair(k); if (pr.from) outgoing.add(pr.from.slot); }
+  let pl = pls.find(s => inSeg(s)), sk = segs.find(s => s.slot === SK && inSeg(s)), shiftedAt = null, from = null, to = null;
+  if (sk) { ({ from, to } = pair(sk)); if (shifts[sk.id] && to) { shiftedAt = shifts[sk.id].t; pl = to; } }
+  else if (!pl) {   // efter et bekræftet skifte, før næste blok starter
+    const last = [...segs].reverse().find(s => s.slot === SK && abs(s.dag, s.from) <= cur && shifts[s.id]);
+    if (last) { const pr = pair(last); if (pr.to && cur < abs(pr.to.dag, pr.to.to)) { pl = pr.to; shiftedAt = shifts[last.id].t; sk = last; from = pr.from; to = pr.to; } }
+  }
+  const nextSeg = pls.find(s => abs(s.dag, s.from) > (pl ? abs(pl.dag, pl.from) : cur) && abs(s.dag, s.from) > cur - 0 && (!pl || s.slot !== pl.slot));
+  return { pl, sk, nextSeg, from, to, shiftedAt, outgoing, cur, abs, segs };
 }
-const slotDone = (slot, st) => S.pl.done[slot] === 1 || (S.pl.done[slot] !== -1 && st.segs.filter(s => s.slot === slot).length > 0 && st.segs.filter(s => s.slot === slot).every(s => st.abs(s.dag, s.to) <= st.cur));
+const slotDone = (slot, st) => S.pl.done[slot] === 1 || (S.pl.done[slot] !== -1 && st.outgoing && st.outgoing.has(slot)) || (S.pl.done[slot] !== -1 && st.segs.filter(s => s.slot === slot).length > 0 && st.segs.filter(s => s.slot === slot).every(s => st.abs(s.dag, s.to) <= st.cur));
 function plCard(link) {
   if (!S.pl.ready) return `<a class="card" href="#/a/${link}/pl"><div class="t">PL-skifteplan</div><div class="n">Opsæt patruljens PL-plan</div><div class="p">Skriv navnene, så husker appen, hvem der har været PL.</div></a>`;
-  const st = plState(), col = PL_COL[S.pl.n];
-  const who = st.pl ? `<div class="n">${esc(plName(st.pl.slot))}</div><div class="p">PL til ${DAYS[st.pl.dag].slice(0, 3)} ${st.pl.to}</div>` : st.sk && st.to ? `<div class="n">Skifter PL</div><div class="p">${esc(st.from ? plName(st.from.slot) : "–")} → ${esc(plName(st.to.slot))}</div>` : `<div class="n">Ingen PL lige nu</div>${st.nextSeg ? `<div class="p">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}`;
-  return `<a class="card now" href="#/a/${link}/pl" style="border-left:0"><div class="t">NU ER PL</div><div style="display:flex;gap:10px;align-items:center"><i style="width:10px;height:34px;border-radius:3px;background:${st.pl ? col[st.pl.slot] : "var(--line)"}"></i><div>${who}</div></div>${st.pl && st.nextSeg ? `<div class="p" style="margin-top:6px">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}</a>`;
+  const st = plState(), col = PL_COL[S.pl.n], sw = c => `<i style="width:10px;height:34px;border-radius:3px;background:${c};flex:none"></i>`;
+  if (st.sk && !st.shiftedAt && st.to) return `<a class="card now" href="#/a/${link}/pl"><div class="t">PATRULJENS TIME · PL SKIFTER</div>
+    <div style="display:flex;align-items:center;gap:10px;margin:6px 0 10px">${sw(st.from ? col[st.from.slot] : "var(--line)")}<div><div class="n">${esc(st.from ? plName(st.from.slot) : "–")}</div><div class="p">går af som PL</div></div><b style="font-size:22px;color:var(--mu);margin:0 4px">→</b>${sw(col[st.to.slot])}<div><div class="n">${esc(plName(st.to.slot))}</div><div class="p">bliver PL</div></div></div>
+    <button class="btn" data-act="plshift:${st.sk.id}" style="margin:0">Skift PL nu</button><div class="p" style="margin-top:6px">Skiftes automatisk, når Patruljens time slutter.</div></a>`;
+  const who = st.pl ? `<div class="n">${esc(plName(st.pl.slot))}</div><div class="p">${st.shiftedAt ? `Skiftet kl. ${esc(st.shiftedAt)} · ` : ""}PL til ${DAYS[st.pl.dag].slice(0, 3)} ${st.pl.to}</div>` : `<div class="n">Ingen PL lige nu</div>${st.nextSeg ? `<div class="p">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}`;
+  return `<a class="card now" href="#/a/${link}/pl"><div class="t">NU ER PL</div><div style="display:flex;gap:10px;align-items:center">${sw(st.pl ? col[st.pl.slot] : "var(--line)")}<div style="flex:1">${who}</div>${st.shiftedAt && st.sk ? `<button data-act="plundo:${st.sk.id}" style="color:var(--act);font-weight:700;font-size:13px;padding:6px">Fortryd</button>` : ""}</div>${st.pl && st.nextSeg ? `<div class="p" style="margin-top:6px">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}</a>`;
 }
 function plSvg() {
   const n = S.pl.n, col = PL_COL[n], W = 358, gx = 30, top = 22, ph = 17.5, T0 = 420, colw = (W - gx - 6) / 6, H = top + 16 * ph + 8, ed = S.plEdit;
@@ -391,8 +400,8 @@ function viewPL(id) {
   if (!S.pl.ready || S.plSetup) {
     while (S.pl.names.length < n) S.pl.names.push("");
     let h = `<h2>Antal i patruljen</h2><div class="seg" style="margin-top:0">${[6, 7].map(k => `<button data-act="pln:${k}" class="${n === k ? "on" : ""}">${k} kursister</button>`).join("")}</div>
-      <h2>Navne · rækkefølge for PL <span style="font-weight:400;text-transform:none;letter-spacing:0">· træk ≡</span></h2><div id="pllist">`;
-    for (let i = 0; i < n; i++) h += `<div class="card plrow" data-i="${i}" style="display:flex;align-items:center;gap:10px;padding:8px 10px 8px 16px"><span class="muted" style="width:14px">${i + 1}</span><input data-plname="${i}" value="${esc(S.pl.names[i] || "")}" placeholder="Navn ${i + 1}" style="flex:1"><button class="drag" data-drag="${i}" aria-label="Flyt" style="font-size:22px;color:var(--mu);padding:6px 4px;touch-action:none;cursor:grab">≡</button><i style="position:absolute;left:0;top:0;bottom:0;width:6px;background:${col[defaultTpl(n).find(s => s.slot === i) ? i : 0]}"></i></div>`;
+      <h2>Navne · hvem er PL hvornår <span style="font-weight:400;text-transform:none;letter-spacing:0">· brug ▲▼ til at flytte et navn</span></h2><div id="pllist">`;
+    for (let i = 0; i < n; i++) { const f = plTpl().find(s => s.slot === i); h += `<div class="card plrow" data-i="${i}" style="display:flex;align-items:center;gap:8px;padding:8px 8px 8px 18px"><i style="position:absolute;left:0;top:0;bottom:0;width:6px;background:${col[i]}"></i><div style="width:62px;flex:none"><b style="font-size:13px">${i + 1}. PL</b><div class="muted" style="font-size:10px">${f ? DAYS[f.dag].slice(0, 3) + " " + f.from : ""}</div></div><input data-plname="${i}" value="${esc(S.pl.names[i] || "")}" placeholder="Navn ${i + 1}" style="flex:1;min-width:0"><div style="display:flex;flex-direction:column;gap:2px;flex:none"><button class="mv" data-act="plmove:${i}:-1" aria-label="Flyt op" ${i === 0 ? "disabled" : ""}>▲</button><button class="mv" data-act="plmove:${i}:1" aria-label="Flyt ned" ${i === n - 1 ? "disabled" : ""}>▼</button></div></div>`; }
     return h + `<button class="btn" data-act="plsave">Gem patrulje</button><div class="hint">Navnene gemmes kun på din telefon.</div>`;
   }
   const st = plState();
@@ -402,8 +411,8 @@ function viewPL(id) {
     const doneN = [...Array(n).keys()].filter(i => slotDone(i, st)).length;
     h += `<div class="line"><h2 style="margin:0">${doneN} af ${n} har været PL</h2><span class="bar" style="width:110px;margin:0"><i style="width:${(doneN / n) * 100}%;background:var(--ac)"></i></span></div>`;
     for (let i = 0; i < n; i++) {
-      const mine = st.segs.filter(s => s.slot === i), dn = slotDone(i, st), isNow = st.pl && st.pl.slot === i, isNext = !st.pl && st.nextSeg && st.nextSeg.slot === i || (st.pl && st.nextSeg && st.nextSeg.slot === i);
-      h += `<div class="card ${dn ? "past" : ""}" style="display:flex;align-items:center;gap:10px;padding-left:18px"><i style="position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:${col[i]}"></i><div style="flex:1"><div class="n">${esc(plName(i))} ${isNow ? '<span class="rec"><i></i>Nu</span>' : isNext ? '<span class="chip dim">Næste</span>' : ""}</div><div class="p">${mine.map(s => `${DAYS[s.dag].slice(0, 3)} ${s.from}–${s.to}`).join(" · ")}</div></div><button class="cb ${dn ? "on" : ""}" data-act="pldone:${i}" aria-label="Har været PL">${dn ? "✓" : ""}</button></div>`;
+      const mine = st.segs.filter(s => s.slot === i), dn = slotDone(i, st), isNow = st.pl && st.pl.slot === i, isNext = !!(st.nextSeg && st.nextSeg.slot === i && !isNow), hand = st.sk && !st.shiftedAt && st.to ? (st.from && st.from.slot === i ? "Går af" : st.to.slot === i ? "Overtager" : "") : "";
+      h += `<div class="card ${dn ? "past" : ""}" style="display:flex;align-items:center;gap:10px;padding-left:18px"><i style="position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:${col[i]}"></i><div style="flex:1"><div class="n">${esc(plName(i))} ${hand ? `<span class="chip ${hand === "Går af" ? "edit" : ""}">${hand}</span>` : isNow ? '<span class="rec"><i></i>Nu</span>' : isNext ? '<span class="chip dim">Næste</span>' : ""}</div><div class="p">${mine.map(s => `${DAYS[s.dag].slice(0, 3)} ${s.from}–${s.to}`).join(" · ")}</div></div><button class="cb ${dn ? "on" : ""}" data-act="pldone:${i}" aria-label="Har været PL">${dn ? "✓" : ""}</button></div>`;
     }
     h += `<div class="hint">Boksen krydses også af sig selv, når turen er slut. Sort “PT” i skemaet = patruljens time, hvor PL skifter.</div>`;
   } else {
@@ -452,17 +461,6 @@ function bindPlDrag() {
     });
     wrap.addEventListener("click", ev => { const b = ev.target.closest("[data-seg]"); if (b && S.plEdit && !ev.target.closest("[data-h]")) openPlBlock(b.dataset.seg); });
   }
-  const list = document.getElementById("pllist");
-  if (list) list.addEventListener("pointerdown", ev => {
-    const hd = ev.target.closest("[data-drag]"); if (!hd) return;
-    ev.preventDefault(); let from = +hd.dataset.drag;
-    const move = e => {
-      const rows = [...list.querySelectorAll(".plrow")]; let to = rows.findIndex(r => { const b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; }); if (to < 0) to = rows.length - 1;
-      if (to !== from) { const [nm] = S.pl.names.splice(from, 1); S.pl.names.splice(to, 0, nm); from = to; render(); const nl = document.getElementById("pllist"); if (nl) nl.querySelectorAll(".plrow")[to].style.opacity = ".6"; bindPlDrag._active = true; }
-    };
-    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); savePl(); render(); };
-    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
-  });
 }
 
 function viewLogin() {
@@ -628,6 +626,17 @@ document.addEventListener("click", ev => {
   else if (act === "pln") { S.pl.n = +p[0]; while (S.pl.names.length < S.pl.n) S.pl.names.push(""); savePl(); }
   else if (act === "plsave") { for (let i = 0; i < S.pl.n; i++) if (!(S.pl.names[i] || "").trim()) S.pl.names[i] = `Kursist ${i + 1}`; S.pl.names.length = S.pl.n; S.pl.ready = true; S.plSetup = false; savePl(); }
   else if (act === "plsetup") S.plSetup = true;
+  else if (act === "plshift") { const t = now(); (S.pl.shifts = S.pl.shifts || {})[p.join(":")] = { t: String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0") }; savePl(); }
+  else if (act === "plundo") { if (S.pl.shifts) delete S.pl.shifts[p.join(":")]; savePl(); }
+  else if (act === "plmove") {
+    const i = +p[0], d = +p[1], k = i + d; if (k < 0 || k >= S.pl.n) return;
+    const rows = [...document.querySelectorAll("#pllist .plrow")]; if (!rows[i] || !rows[k]) return;
+    const a = rows[i].querySelector("input"), b = rows[k].querySelector("input"), ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    while (S.pl.names.length < S.pl.n) S.pl.names.push("");
+    [S.pl.names[i], S.pl.names[k]] = [S.pl.names[k], S.pl.names[i]]; [a.value, b.value] = [b.value, a.value]; savePl();
+    for (const [el, from] of [[a, rb.top - ra.top], [b, ra.top - rb.top]]) { el.style.transition = "none"; el.style.transform = `translateY(${from}px)`; el.style.position = "relative"; el.style.zIndex = "2"; el.classList.add("moved"); void el.offsetWidth; el.style.transition = "transform .35s ease"; el.style.transform = ""; setTimeout(() => { el.classList.remove("moved"); el.style.zIndex = ""; }, 900); }
+    return;
+  }
   else if (act === "plv") S.plView = p[0];
   else if (act === "pledit") S.plEdit = !S.plEdit;
   else if (act === "pldone") { const i = +p[0], st = plState(), d = slotDone(i, st); S.pl.done[i] = d ? -1 : 1; savePl(); }
