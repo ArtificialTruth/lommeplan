@@ -17,6 +17,8 @@ const S = {
   aud: ls.get("lp_aud", "begge"), mine: ls.get("lp_mine") === "1", demo: ls.get("lp_demo") || null,
   over: (() => { try { return JSON.parse(ls.get("lp_over", "{}")); } catch { return {}; } })(),
   claim: (() => { try { return JSON.parse(ls.get("lp_claim", "{}")); } catch { return {}; } })(),
+  pl: (() => { try { return { n: 6, names: [], ready: false, tpl: {}, done: {}, ...JSON.parse(ls.get("lp_pl", "{}")) }; } catch { return { n: 6, names: [], ready: false, tpl: {}, done: {} }; } })(),
+  plView: "liste", plEdit: false,
   showPast: false, expand: false, loginErr: "", onb: 0, pw: "", installEv: null, todoTab: "idag",
   todo: (() => { try { return { done: {}, hidden: {}, own: [], ...JSON.parse(ls.get("lp_todo", "{}")) }; } catch { return { done: {}, hidden: {}, own: [] }; } })(),
   cal: { aud: "begge", mine: false, days: [0, 1, 2, 3, 4, 5], skip: [], alarm: 0 },
@@ -29,6 +31,7 @@ function applyTheme() {
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? "#000000" : "#f2f3f5";
 }
 applyTheme();
+const savePl = () => ls.set("lp_pl", JSON.stringify(S.pl));
 const saveClaim = () => ls.set("lp_claim", JSON.stringify(S.claim));
 const saveTodo = () => ls.set("lp_todo", JSON.stringify(S.todo));
 const standalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
@@ -174,6 +177,7 @@ function viewAct(id, tab) {
   const a = actFull(id);
   if (!a) return `<a href="#/uge">‹ Tilbage</a><p>Aktiviteten findes ikke.</p>`;
   tab = tab || "resume";
+  const hasPl = PL_IDS.includes(id);
   const evs = allEvents().filter(e => e.aktivitet === id);
   const doc = S.data.events.find(e => e.aktivitet === id && e.docUrl);
   const when = evs.length ? evs.map(e => `${DAYS[dayIdx(e.dato)]} ${e.start}–${e.slut}`).join(" · ") : a.tidTekst;
@@ -181,9 +185,11 @@ function viewAct(id, tab) {
   let h = `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a><button class="pill on" data-act="edit:a:${id}" style="color:var(--tx);border-color:var(--line)">✎ Ret</button></div>
     <h1 style="margin-top:14px">${esc(a.id)} · ${esc(a.titel)} ${a.rettet ? '<span class="chip edit">rettet</span>' : ""}</h1>
     <div class="meta"><div>🕒 ${esc(when)}</div>${a.ansvarlig ? `<div>👤 ${esc(a.ansvarlig)}</div>` : ""}${place ? `<div>📍 ${esc(place)} · <a href="${mapsUrl(place)}" target="_blank" rel="noopener">Åbn i Maps ›</a></div>` : ""}</div>
-    <div class="tabs">${[["resume", "Resumé"], ["tid", "Tidsplan"], ["fantasi", "Fantasi"], ["bem", "Bemanding"]].map(([k, l]) => `<a href="#/a/${id}/${k}" class="${tab === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
+    <div class="tabs">${[["resume", "Resumé"], ["tid", "Tidsplan"], ...(hasPl ? [["pl", "PL-plan"]] : []), ["fantasi", "Fantasi"], ["bem", "Bemanding"]].map(([k, l]) => `<a href="#/a/${id}/${k}" class="${tab === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
   h += `<button class="btn ${mineAct(id) ? "alt" : ""}" data-act="claim:${id}">${mineAct(id) ? "★ Det er min – tryk for at fjerne" : "☆ Det er min"}</button>`;
   if (a.note) h += `<div class="box" style="border:1.5px solid var(--mine)"><h2 style="margin:0 0 6px">Min note</h2>${paras(a.note)}</div>`;
+  if (hasPl && tab === "resume") h += `<h2>PL-skifteplan</h2>${plCard(id)}`;
+  if (tab === "pl" && hasPl) { return h.replace(/<button class="btn[^"]*" data-act="claim:[^>]*>[^<]*<\/button>/, "") + viewPL(id); }
   if (tab === "resume") {
     h += `<h2>Formål</h2><div class="prose">${paras(a.formaal) || '<p class="muted">Ikke beskrevet.</p>'}</div>`;
     if (a.koncept) h += `<h2>Koncept</h2><div class="prose ${S.expand ? "" : "clamp"}">${paras(a.koncept)}</div><button class="fold" data-act="expand">${S.expand ? "Vis mindre" : "Læs hele konceptet ▾"}</button>`;
@@ -322,6 +328,134 @@ function viewOnb() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:22px">${S.data.personer.map(n => `<button class="pill" style="padding:12px;font-size:15px;color:var(--tx)" data-act="pick:${esc(n)}">${esc(n)}</button>`).join("")}</div></div>`;
 }
 
+// ---------- PL-skifteplan (patruljens time) ----------
+const PL_IDS = ["5", "8", "19"];
+const PL_COL = { 6: ["#d92b1f", "#f2c91b", "#b7c9a0", "#1c9be6", "#c9bfe0", "#aab7e0"], 7: ["#d92b1f", "#f6c9a3", "#f2c91b", "#b7c9a0", "#1c9be6", "#c9bfe0", "#aab7e0"] };
+const PL_DARK = new Set(["#d92b1f", "#1c9be6"]);
+const SK = -1;   // skift = patruljens time, hvor PL skifter
+function defaultTpl(n) {
+  const T = n === 6
+    ? [[0, 0, "13:00", "19:15"], [SK, 0, "19:30", "21:00"], [1, 1, "09:00", "18:30"], [SK, 1, "18:30", "20:00"], [2, 1, "20:00", "21:00"], [2, 2, "13:15", "16:45"], [3, 2, "17:00", "23:00"], [3, 3, "07:00", "10:30"], [SK, 3, "10:30", "12:00"], [4, 3, "13:15", "21:00"], [5, 4, "09:00", "16:00"], [SK, 4, "16:00", "18:00"], [0, 4, "18:00", "23:00"], [0, 5, "09:00", "12:00"]]
+    : [[0, 0, "13:00", "19:15"], [SK, 0, "19:30", "21:00"], [1, 1, "09:00", "12:00"], [2, 1, "13:15", "18:30"], [SK, 1, "18:30", "20:00"], [3, 1, "20:00", "21:00"], [3, 2, "13:15", "16:45"], [4, 2, "17:00", "23:00"], [4, 3, "07:00", "10:30"], [SK, 3, "10:30", "12:00"], [5, 3, "13:15", "21:00"], [6, 4, "09:00", "16:00"], [SK, 4, "16:00", "18:00"], [1, 4, "18:00", "23:00"], [1, 5, "09:00", "12:00"]];
+  return T.map(([slot, dag, from, to], i) => ({ id: "s" + i, slot, dag, from, to }));
+}
+const plTpl = () => S.pl.tpl[S.pl.n] || (S.pl.tpl[S.pl.n] = defaultTpl(S.pl.n));
+const plName = i => (S.pl.names[i] || "").trim() || `Kursist ${i + 1}`;
+const mm = t => +t.slice(0, 2) * 60 + +t.slice(3);
+const hhmm = m => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+function plState() {
+  const n = now(), nm = n.getHours() * 60 + n.getMinutes(), di = dayIdx(ymd(n));
+  const abs = (d, t) => d * 1440 + mm(t), cur = (di >= 0 ? di : n < at(DATES[0], "00:00") ? -1 : 6) * 1440 + nm;
+  const segs = plTpl().slice().sort((a, b) => abs(a.dag, a.from) - abs(b.dag, b.from));
+  const inSeg = s => abs(s.dag, s.from) <= cur && cur < abs(s.dag, s.to);
+  const pl = segs.find(s => s.slot !== SK && inSeg(s)), sk = segs.find(s => s.slot === SK && inSeg(s));
+  const pls = segs.filter(s => s.slot !== SK);
+  const nextSeg = pls.find(s => abs(s.dag, s.from) > cur && (!pl || s.slot !== pl.slot));
+  let from = null, to = null;
+  if (sk) { from = [...pls].reverse().find(s => abs(s.dag, s.to) <= abs(sk.dag, sk.from) + 1); to = pls.find(s => abs(s.dag, s.from) >= abs(sk.dag, sk.to) - 1); }
+  return { pl, sk, nextSeg, from, to, cur, abs, segs };
+}
+const slotDone = (slot, st) => S.pl.done[slot] === 1 || (S.pl.done[slot] !== -1 && st.segs.filter(s => s.slot === slot).length > 0 && st.segs.filter(s => s.slot === slot).every(s => st.abs(s.dag, s.to) <= st.cur));
+function plCard(link) {
+  if (!S.pl.ready) return `<a class="card" href="#/a/${link}/pl"><div class="t">PL-skifteplan</div><div class="n">Opsæt patruljens PL-plan</div><div class="p">Skriv navnene, så husker appen, hvem der har været PL.</div></a>`;
+  const st = plState(), col = PL_COL[S.pl.n];
+  const who = st.pl ? `<div class="n">${esc(plName(st.pl.slot))}</div><div class="p">PL til ${DAYS[st.pl.dag].slice(0, 3)} ${st.pl.to}</div>` : st.sk && st.to ? `<div class="n">Skifter PL</div><div class="p">${esc(st.from ? plName(st.from.slot) : "–")} → ${esc(plName(st.to.slot))}</div>` : `<div class="n">Ingen PL lige nu</div>${st.nextSeg ? `<div class="p">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}`;
+  return `<a class="card now" href="#/a/${link}/pl" style="border-left:0"><div class="t">NU ER PL</div><div style="display:flex;gap:10px;align-items:center"><i style="width:10px;height:34px;border-radius:3px;background:${st.pl ? col[st.pl.slot] : "var(--line)"}"></i><div>${who}</div></div>${st.pl && st.nextSeg ? `<div class="p" style="margin-top:6px">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}</a>`;
+}
+function plSvg() {
+  const n = S.pl.n, col = PL_COL[n], W = 358, gx = 30, top = 22, ph = 17.5, T0 = 420, colw = (W - gx - 6) / 6, H = top + 16 * ph + 8, ed = S.plEdit;
+  const y = m => top + ((m - T0) / 60) * ph, now1 = now(), nowm = now1.getHours() * 60 + now1.getMinutes(), di = dayIdx(ymd(now1));
+  let s = `<svg id="plsvg" class="ov plsvg ${ed ? "edit" : ""}" viewBox="0 0 ${W} ${H}">`;
+  DAYS.forEach((d, i) => s += `<text class="ov-mu" x="${gx + i * colw + colw / 2}" y="12" font-size="10" font-weight="800" text-anchor="middle">${d.slice(0, 3)}</text>`);
+  for (let h = 7; h <= 23; h += 2) s += `<line class="ov-grid" x1="${gx - 2}" x2="${gx + 6 * colw}" y1="${y(h * 60)}" y2="${y(h * 60)}"/><text class="ov-mu" x="${gx - 5}" y="${y(h * 60) + 3}" font-size="8" text-anchor="end">${String(h).padStart(2, "0")}</text>`;
+  for (const sg of plTpl()) {
+    const x = gx + sg.dag * colw + 1, y0 = y(mm(sg.from)), h = ((mm(sg.to) - mm(sg.from)) / 60) * ph, w = colw - 2, skf = sg.slot === SK, c = skf ? "#14161a" : col[sg.slot] || "#999";
+    s += `<g><rect data-seg="${sg.id}" x="${x}" y="${y0}" width="${w}" height="${h}" rx="4" fill="${c}"/><text x="${x + w / 2}" y="${y0 + h / 2 + 3}" font-size="8" font-weight="700" text-anchor="middle" fill="${skf || PL_DARK.has(c) ? "#fff" : "#14161a"}" pointer-events="none">${skf ? "PT" : esc(plName(sg.slot).slice(0, 7))}</text>`;
+    if (ed) s += `<rect data-h="${sg.id}:t" x="${x}" y="${y0 - 3}" width="${w}" height="9" fill="#fff" fill-opacity=".001" /><rect x="${x + w / 2 - 8}" y="${y0 - 1}" width="16" height="3" rx="1.5" fill="#fff" stroke="#14161a" stroke-width=".6" pointer-events="none"/><rect data-h="${sg.id}:b" x="${x}" y="${y0 + h - 6}" width="${w}" height="9" fill="#fff" fill-opacity=".001"/><rect x="${x + w / 2 - 8}" y="${y0 + h - 2}" width="16" height="3" rx="1.5" fill="#fff" stroke="#14161a" stroke-width=".6" pointer-events="none"/>`;
+    s += `</g>`;
+  }
+  if (di >= 0) { const ny = Math.min(Math.max(y(nowm), top), y(1380)); s += `<line x1="${gx - 6}" x2="${gx + 6 * colw + 2}" y1="${ny}" y2="${ny}" class="ov-now-line"/>`; }
+  return s + `</svg>`;
+}
+function viewPL(id) {
+  const n = S.pl.n, col = PL_COL[n];
+  if (!S.pl.ready || S.plSetup) {
+    while (S.pl.names.length < n) S.pl.names.push("");
+    let h = `<h2>Antal i patruljen</h2><div class="seg" style="margin-top:0">${[6, 7].map(k => `<button data-act="pln:${k}" class="${n === k ? "on" : ""}">${k} kursister</button>`).join("")}</div>
+      <h2>Navne · rækkefølge for PL <span style="font-weight:400;text-transform:none;letter-spacing:0">· træk ≡</span></h2><div id="pllist">`;
+    for (let i = 0; i < n; i++) h += `<div class="card plrow" data-i="${i}" style="display:flex;align-items:center;gap:10px;padding:8px 10px 8px 16px"><span class="muted" style="width:14px">${i + 1}</span><input data-plname="${i}" value="${esc(S.pl.names[i] || "")}" placeholder="Navn ${i + 1}" style="flex:1"><button class="drag" data-drag="${i}" aria-label="Flyt" style="font-size:22px;color:var(--mu);padding:6px 4px;touch-action:none;cursor:grab">≡</button><i style="position:absolute;left:0;top:0;bottom:0;width:6px;background:${col[defaultTpl(n).find(s => s.slot === i) ? i : 0]}"></i></div>`;
+    return h + `<button class="btn" data-act="plsave">Gem patrulje</button><div class="hint">Navnene gemmes kun på din telefon.</div>`;
+  }
+  const st = plState();
+  let h = `<div style="margin-top:12px">${plCard(id)}</div>`;
+  h += `<div class="seg"><button data-act="plv:liste" class="${S.plView === "liste" ? "on" : ""}">Liste</button><button data-act="plv:skema" class="${S.plView === "skema" ? "on" : ""}">Skema</button></div>`;
+  if (S.plView === "liste") {
+    const doneN = [...Array(n).keys()].filter(i => slotDone(i, st)).length;
+    h += `<div class="line"><h2 style="margin:0">${doneN} af ${n} har været PL</h2><span class="bar" style="width:110px;margin:0"><i style="width:${(doneN / n) * 100}%;background:var(--ac)"></i></span></div>`;
+    for (let i = 0; i < n; i++) {
+      const mine = st.segs.filter(s => s.slot === i), dn = slotDone(i, st), isNow = st.pl && st.pl.slot === i, isNext = !st.pl && st.nextSeg && st.nextSeg.slot === i || (st.pl && st.nextSeg && st.nextSeg.slot === i);
+      h += `<div class="card ${dn ? "past" : ""}" style="display:flex;align-items:center;gap:10px;padding-left:18px"><i style="position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:${col[i]}"></i><div style="flex:1"><div class="n">${esc(plName(i))} ${isNow ? '<span class="rec"><i></i>Nu</span>' : isNext ? '<span class="chip dim">Næste</span>' : ""}</div><div class="p">${mine.map(s => `${DAYS[s.dag].slice(0, 3)} ${s.from}–${s.to}`).join(" · ")}</div></div><button class="cb ${dn ? "on" : ""}" data-act="pldone:${i}" aria-label="Har været PL">${dn ? "✓" : ""}</button></div>`;
+    }
+    h += `<div class="hint">Boksen krydses også af sig selv, når turen er slut. Sort “PT” i skemaet = patruljens time, hvor PL skifter.</div>`;
+  } else {
+    h += `<div class="box" style="padding:10px"><div class="row2" style="margin:0 0 8px"><div class="seg" style="flex:1;margin:0">${[6, 7].map(k => `<button data-act="pln:${k}" class="${n === k ? "on" : ""}">${k}</button>`).join("")}</div><button class="pill ${S.plEdit ? "on" : ""}" data-act="pledit">✎ Ret skema</button></div><div id="plwrap">${plSvg()}</div>
+      <div class="ovleg">${[...Array(n).keys()].map(i => `<span><i style="background:${col[i]};width:9px"></i>${esc(plName(i))}</span>`).join("")}<span><i style="background:#14161a"></i>PT = PL skifter</span></div>
+      ${S.plEdit ? `<div class="hint">Træk i kanten af en blok for at ændre tiden. Tryk på en blok for at skifte person eller slette den.</div><div class="row2"><button class="btn alt" data-act="pladd">+ Ny blok</button><button class="btn ghost" data-act="plreset">Nulstil skema</button></div>` : ""}</div>`;
+  }
+  return h + `<button class="btn ghost" data-act="plsetup">Rediger navne og antal</button>`;
+}
+function openPlBlock(id) {
+  const sg = plTpl().find(s => s.id === id); if (!sg) return;
+  const opts = [...Array(S.pl.n).keys()].map(i => `<option value="${i}" ${sg.slot === i ? "selected" : ""}>${esc(plName(i))}</option>`).join("");
+  const bg = document.createElement("div"); bg.className = "sheetbg";
+  bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">Ret blok</h1><div class="field"><label>Hvem</label><select id="pls"><option value="-1" ${sg.slot === SK ? "selected" : ""}>Patruljens time – PL skifter</option>${opts}</select></div>
+    <div class="field"><label>Dag</label><select id="pld">${DAYS.map((d, i) => `<option value="${i}" ${sg.dag === i ? "selected" : ""}>${d}</option>`).join("")}</select></div>
+    <div class="row2"><div class="field" style="flex:1"><label>Fra</label><input id="plf" type="time" step="900" value="${sg.from}"></div><div class="field" style="flex:1"><label>Til</label><input id="plt" type="time" step="900" value="${sg.to}"></div></div>
+    <div class="row2"><button class="btn alt" data-x="del">Slet blok</button><button class="btn" data-x="save">Gem</button></div><button class="btn ghost" data-x="close">Annullér</button></div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener("click", ev => {
+    const x = ev.target.dataset.x;
+    if (ev.target === bg || x === "close") return bg.remove();
+    if (x === "del") { S.pl.tpl[S.pl.n] = plTpl().filter(s => s.id !== id); savePl(); bg.remove(); render(); }
+    if (x === "save") {
+      const f = bg.querySelector("#plf").value, t = bg.querySelector("#plt").value;
+      if (f && t && mm(t) > mm(f)) { sg.slot = +bg.querySelector("#pls").value; sg.dag = +bg.querySelector("#pld").value; sg.from = f; sg.to = t; savePl(); bg.remove(); render(); }
+    }
+  });
+}
+// træk i kanter (skema) og træk for at flytte navne
+function bindPlDrag() {
+  const wrap = document.getElementById("plwrap");
+  if (wrap && S.plEdit) {
+    wrap.addEventListener("pointerdown", ev => {
+      const hEl = ev.target.closest("[data-h]"); if (!hEl) return;
+      ev.preventDefault();
+      const [id, edge] = hEl.dataset.h.split(":"), sg = plTpl().find(s => s.id === id); if (!sg) return;
+      const move = e => {
+        const svg = document.getElementById("plsvg"), pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+        const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+        let m = Math.round((420 + ((p.y - 22) / 17.5) * 60) / 15) * 15; m = Math.max(420, Math.min(1380, m));
+        if (edge === "t") sg.from = hhmm(Math.min(m, mm(sg.to) - 15)); else sg.to = hhmm(Math.max(m, mm(sg.from) + 15));
+        wrap.innerHTML = plSvg();
+      };
+      const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); savePl(); render(); };
+      window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+    });
+    wrap.addEventListener("click", ev => { const b = ev.target.closest("[data-seg]"); if (b && S.plEdit && !ev.target.closest("[data-h]")) openPlBlock(b.dataset.seg); });
+  }
+  const list = document.getElementById("pllist");
+  if (list) list.addEventListener("pointerdown", ev => {
+    const hd = ev.target.closest("[data-drag]"); if (!hd) return;
+    ev.preventDefault(); let from = +hd.dataset.drag;
+    const move = e => {
+      const rows = [...list.querySelectorAll(".plrow")]; let to = rows.findIndex(r => { const b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; }); if (to < 0) to = rows.length - 1;
+      if (to !== from) { const [nm] = S.pl.names.splice(from, 1); S.pl.names.splice(to, 0, nm); from = to; render(); const nl = document.getElementById("pllist"); if (nl) nl.querySelectorAll(".plrow")[to].style.opacity = ".6"; bindPlDrag._active = true; }
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); savePl(); render(); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  });
+}
+
 function viewLogin() {
   return `<div class="login">${ALIEN.replace('class="alien"', 'class="alien" style="width:90px;height:90px"')}<h1 style="font-size:30px">Lommeplan</h1><div class="sub">PLanstar 2026 · for teamere</div>
     <form id="lf"><div class="field" style="margin-top:40px;text-align:left"><label>Din kode</label><input id="code" value="${esc(S.loginDraft || "")}" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></div>
@@ -443,7 +577,7 @@ function render() {
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
   else { h = viewUge(a); tab = "uge"; }
   $app.innerHTML = h + nav(tab);
-  updateNowLine();
+  updateNowLine(); bindPlDrag();
 }
 function bindLogin() {
   const f = document.getElementById("lf"); if (!f) return;
@@ -477,6 +611,14 @@ document.addEventListener("click", ev => {
   else if (act === "expand") S.expand = !S.expand;
   else if (act === "theme") { ls.set("lp_theme", p[0]); applyTheme(); }
   else if (act === "ht") S.todoTab = p[0];
+  else if (act === "pln") { S.pl.n = +p[0]; while (S.pl.names.length < S.pl.n) S.pl.names.push(""); savePl(); }
+  else if (act === "plsave") { for (let i = 0; i < S.pl.n; i++) if (!(S.pl.names[i] || "").trim()) S.pl.names[i] = `Kursist ${i + 1}`; S.pl.names.length = S.pl.n; S.pl.ready = true; S.plSetup = false; savePl(); }
+  else if (act === "plsetup") S.plSetup = true;
+  else if (act === "plv") S.plView = p[0];
+  else if (act === "pledit") S.plEdit = !S.plEdit;
+  else if (act === "pldone") { const i = +p[0], st = plState(), d = slotDone(i, st); S.pl.done[i] = d ? -1 : 1; savePl(); }
+  else if (act === "pladd") { const t = plTpl(); t.push({ id: "s" + Date.now().toString(36), slot: 0, dag: Math.max(0, dayIdx(ymd(now()))), from: "09:00", to: "10:00" }); savePl(); }
+  else if (act === "plreset") { if (confirm("Nulstil skemaet til standard?")) { delete S.pl.tpl[S.pl.n]; savePl(); } }
   else if (act === "td") { const id = p.join(":"); S.todo.done[id] ? delete S.todo.done[id] : (S.todo.done[id] = 1); saveTodo(); }
   else if (act === "tdel") { const id = p.join(":"), i = S.todo.own.findIndex(o => o.id === id); if (i >= 0) S.todo.own.splice(i, 1); else S.todo.hidden[id] = 1; delete S.todo.done[id]; saveTodo(); }
   else if (act === "trestore") { S.todo.hidden = {}; saveTodo(); }
@@ -496,12 +638,13 @@ document.addEventListener("click", ev => {
   }
   else if (act === "ics") return saveFile("lommeplan.ics", buildIcs(), "text/calendar", false);
   else if (act === "icsshare") return saveFile("lommeplan.ics", buildIcs(), "text/calendar", true);
-  else if (act === "exp") return saveFile("lommeplan-sikkerhedskopi.json", JSON.stringify({ v: 1, navn: S.me, rettelser: S.over, huskeliste: S.todo }, null, 1), "application/json", true);
+  else if (act === "exp") return saveFile("lommeplan-sikkerhedskopi.json", JSON.stringify({ v: 1, navn: S.me, rettelser: S.over, huskeliste: S.todo, pl: S.pl, claim: S.claim }, null, 1), "application/json", true);
   else if (act === "resetall") { if (confirm("Nulstil alle dine rettelser?")) { S.over = {}; saveOver(); } }
   else if (act === "demooff") { S.demo = null; ls.del("lp_demo"); }
   else if (act === "logout") { if (confirm("Glem nøglen? Du skal bruge dit link eller din kode igen.")) { ["lp_key", "lp_name", "lp_exp", "lp_onb"].forEach(ls.del); S.data = null; S.me = null; S.onb = 0; } }
   render();
 });
+document.addEventListener("input", ev => { const el = ev.target; if (el.dataset && el.dataset.plname !== undefined) { S.pl.names[+el.dataset.plname] = el.value; savePl(); } });
 document.addEventListener("change", ev => {
   const el = ev.target; if (!el.dataset || !el.dataset.act) return;
   const [act, ...p] = el.dataset.act.split(":");
@@ -517,7 +660,8 @@ document.addEventListener("change", ev => {
           S.over = { ...S.over, ...(o.rettelser || {}) }; saveOver();
           const h = o.huskeliste || {}; S.todo.done = { ...S.todo.done, ...(h.done || {}) }; S.todo.hidden = { ...S.todo.hidden, ...(h.hidden || {}) };
           for (const x of h.own || []) if (!S.todo.own.some(y => y.id === x.id)) S.todo.own.push(x);
-          saveTodo(); if (o.navn && !S.me) { S.me = o.navn; ls.set("lp_name", S.me); }
+          saveTodo(); if (o.pl) { S.pl = { ...S.pl, ...o.pl }; savePl(); } if (o.claim) { S.claim = { ...S.claim, ...o.claim }; saveClaim(); }
+          if (o.navn && !S.me) { S.me = o.navn; ls.set("lp_name", S.me); }
         } else { S.over = { ...S.over, ...o }; saveOver(); }
         alert("Sikkerhedskopi indlæst.");
       } catch { alert("Filen kunne ikke læses."); }

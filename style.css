@@ -105,3 +105,5 @@ nav.bar2 a i{display:block;font-style:normal;font-size:21px;line-height:1.2}nav.
 .ov-now-line{stroke:var(--rec);stroke-width:1.6}.ov-now-pill{fill:var(--rec)}
 .ovleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10px;color:var(--mu);margin-top:6px}.ovleg i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
 .ovleg .k{background:var(--ac)}.ovleg .t{background:var(--team);width:5px}.ovleg .m{background:var(--mine);border-radius:50%;width:8px}.ovleg .n{background:var(--now);outline:1px solid var(--rec)}.ovleg .p{background:var(--ac);opacity:.35}
+
+.plsvg.edit{touch-action:none}.plsvg [data-h]{cursor:ns-resize}.plrow input{padding:8px 10px}.drag{user-select:none}
