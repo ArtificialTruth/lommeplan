@@ -66,7 +66,7 @@ function evFull(e) {
   const o = S.over["e:" + e.id] || {};
   return { ...e, start: o.start || e.start, slut: o.slut || e.slut, titel: o.titel || e.titel, note: o.note || "", rettet: !!(o.start || o.slut || o.titel) };
 }
-const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde", "marie e": "Marie", "marie b": "Marie", alsa: "Asla" };
+const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde", "marie e": "Marie", "marie b": "Marie", alsa: "Asla", havbro: "Mads" };
 function whoIs(n) { const b = n.replace(/\(.*?\)/g, "").trim(); return PALIAS[b.toLowerCase()] || b; }
 function actFull(id) {
   const a = S.data.aktiviteter[id];
