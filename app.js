@@ -221,7 +221,7 @@ function viewAct(id, tab) {
   } else {
     h += `<h2>Ansvarlig</h2><div class="prose"><p>${esc(a.ansvarlig) || "–"}</p></div>`;
     if (a.bemandingDage && Object.keys(a.bemandingDage).length) {
-      h += `<h2>Pr. dag</h2>` + DAYS.filter(d => a.bemandingDage[d]).map(d => `<div class="box"><b>${d}</b><div class="names" style="margin-top:8px">${a.bemandingDage[d].map(n => `<span class="${n === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div></div>`).join("");
+      h += `<h2>Pr. dag</h2>` + DAYS.filter(d => a.bemandingDage[d]).map(d => `<div class="box"><b>${d}</b><div class="names" style="margin-top:8px">${a.bemandingDage[d].map(n => `${personChip(n)}`).join("")}</div></div>`).join("");
     } else if (a.roller && a.roller.length) {
       if (a.bemandingTitel) h += `<h2>${esc(a.bemandingTitel)}</h2>`;
       const mineR = a.roller.filter(r => r.navne.some(n => whoIs(n) === S.me));
@@ -229,11 +229,11 @@ function viewAct(id, tab) {
       let last = "";
       for (const r of a.roller) {
         if (r.post !== last) { if (r.post) h += `<h2>${esc(r.post)}</h2>`; last = r.post; }
-        h += `<div class="box"><div class="line" style="padding:0;align-items:flex-start"><b>${esc(r.rolle)}</b><span class="muted" style="text-align:right;flex:none">${r.tid ? esc(r.tid) + "<br>" : ""}${r.antal ? esc(r.antal) + " pers." : ""}</span></div>${r.navne.length ? `<div class="names" style="margin-top:8px">${r.navne.map(n => `<span class="${whoIs(n) === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div>` : '<div class="muted" style="margin-top:6px">Ingen navne endnu</div>'}${r.note ? `<div class="muted" style="margin-top:8px">📝 ${esc(r.note)}</div>` : ""}</div>`;
+        h += `<div class="box"><div class="line" style="padding:0;align-items:flex-start"><b>${esc(r.rolle)}</b><span class="muted" style="text-align:right;flex:none">${r.tid ? esc(r.tid) + "<br>" : ""}${r.antal ? esc(r.antal) + " pers." : ""}</span></div>${r.navne.length ? `<div class="names" style="margin-top:8px">${r.navne.map(n => `${personChip(n)}`).join("")}</div>` : '<div class="muted" style="margin-top:6px">Ingen navne endnu</div>'}${r.note ? `<div class="muted" style="margin-top:8px">📝 ${esc(r.note)}</div>` : ""}</div>`;
       }
       for (const n of a.bemandingNoter || []) h += `<div class="box muted">📝 ${esc(n)}</div>`;
     } else h += `<h2>Teamere</h2>`;
-    if (!(a.roller && a.roller.length) && !(a.bemandingDage && Object.keys(a.bemandingDage).length)) h += a.bemanding.length ? `<div class="names">${a.bemanding.map(n => `<span class="${n === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div>` : `<p class="muted">Ingen bemanding fundet i beskrivelsen.</p>`;
+    if (!(a.roller && a.roller.length) && !(a.bemandingDage && Object.keys(a.bemandingDage).length)) h += a.bemanding.length ? `<div class="names">${a.bemanding.map(n => `${personChip(n)}`).join("")}</div>` : `<p class="muted">Ingen bemanding fundet i beskrivelsen.</p>`;
     if (a.bemandingRaa) h += `<details class="box"><summary>Original tekst</summary><div class="prose" style="margin-top:8px">${paras(a.bemandingRaa)}</div></details>`;
   }
   if (doc) h += `<a class="btn ghost" href="${esc(doc.docUrl)}" target="_blank" rel="noopener">🔗 Åbn original i Google Docs</a>`;
@@ -488,10 +488,17 @@ function viewPatruljer(sub) {
   sub = sub || "liste";
   const P = S.data.patruljer || [], my = myPatrolName(), mp = P.find(p => p.navn === my);
   let h = `<div class="top"><div><h1>Patruljer</h1><div class="sub">${P.length} patruljer · ${P.reduce((n, p) => n + p.vejledere.length, 0)} vejledere</div></div>${ALIEN}</div>
-    <div class="tabs" style="margin:12px -16px">${[["liste", "Patruljer"], ["pl", "PL-plan"], ["lejr", "Lejrplads"]].map(([k, l]) => `<a href="#/patruljer/${k}" class="${sub === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
+    <div class="tabs" style="margin:12px -16px">${[["liste", "Patruljer"], ["pl", "PL-plan"], ["lejr", "Lejrplads"], ["team", "Team"]].map(([k, l]) => `<a href="#/patruljer/${k}" class="${sub === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
   if (sub === "pl") {
     h += mp ? `<div class="line" style="padding:0 0 4px">${patrolDot(mp.farve, 22)}<b style="flex:1">${esc(mp.navn)}</b><span class="muted">${esc(mp.vejledere.join(" & "))}</span></div>` : `<div class="box muted">Vælg din patrulje under “Patruljer”, så vi ved, hvem PL-planen gælder.</div>`;
     return h + viewPL("pl");
+  }
+  if (sub === "team") {
+    const q = (S.teamQ || "").toLowerCase(), col = n => { const pp = P.find(p => p.vejledere.some(v => whoIs(v) === n)); return pp ? patrolDot(pp.farve, 18) : '<i style="width:18px"></i>'; };
+    h += `<input id="tq" placeholder="Søg teamer …" value="${esc(S.teamQ || "")}" style="margin:4px 0 10px">`;
+    const list = [...S.data.personer].sort((a, b) => a.localeCompare(b, "da")).filter(n => !q || n.toLowerCase().includes(q));
+    h += list.map(n => { const t = (S.data.telefon || {})[n]; return `<div class="card" style="display:flex;align-items:center;gap:10px;padding-left:16px">${col(n)}<div style="flex:1"><div class="n">${esc(n)}${n === S.me ? ' <span class="chip">dig</span>' : ""}</div><div class="p">${t ? esc(t) : "Intet nummer endnu"}</div></div>${t ? `<a class="pill on" href="tel:${esc(t)}" style="text-decoration:none;color:var(--tx)">Ring</a><a class="pill on" href="sms:${esc(t)}" style="text-decoration:none;color:var(--tx)">SMS</a>` : ""}</div>`; }).join("") || '<div class="box muted">Ingen teamere fundet.</div>';
+    return h;
   }
   if (sub === "lejr") {
     h += `<div class="box" style="font-size:14px">Hver patrulje har sin egen lejrplads, så pladsen føles som deres egen og ikke som en lejrgade.<div class="row2" style="margin-top:10px"><div class="box" style="margin:0;flex:1"><div class="muted">Patruljeplads</div><b>10 × 10 m</b></div><div class="box" style="margin:0;flex:1"><div class="muted">Huggeplads</div><b>10 × 10 m</b></div></div></div>`;
@@ -499,44 +506,25 @@ function viewPatruljer(sub) {
     h += `<h2>PT-steder</h2>` + P.map(p => `<div class="card" style="display:flex;gap:12px;align-items:center;padding-left:18px">${patrolDot(p.farve, 24)}<div><div class="n">${esc(p.navn)}</div><div class="p">${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div></div>`).join("");
     return h;
   }
+  if (S.data.fotoLink) h += `<a class="btn" href="${esc(S.data.fotoLink)}" target="_blank" rel="noopener" style="margin:0 0 12px">📷 Billeder af kursisterne</a>`;
   if (mp) h += `<div class="card now" style="padding-left:18px"><div class="t">DIN PATRULJE</div><div style="display:flex;align-items:center;gap:12px">${patrolDot(mp.farve, 34)}<div><div class="n">${esc(mp.navn)} · ${esc(mp.vejledere.join(" & "))}</div><div class="p">PT: ${esc(mp.pt)}</div></div></div></div>`;
   h += P.map(p => { const me = p.navn === my;
-    return `<div class="card" style="padding-left:18px;${me ? "box-shadow:inset 0 0 0 2px var(--now)" : ""}"><div style="display:flex;align-items:center;gap:12px">${patrolDot(p.farve, 30)}<div style="flex:1"><div class="n">${esc(p.navn)}</div><div class="names" style="margin-top:4px">${p.vejledere.map(v => `<span class="${whoIs(v) === S.me ? "me" : ""}">${esc(v)}</span>`).join("")}</div></div>${S.kontakter && S.kontakter.patruljer[p.navn] ? `<button class="pill" data-act="kontakt:${esc(p.navn)}" aria-label="Kontakter">📇</button>` : ""}<button class="pill ${me ? "on" : ""}" data-act="patrol:${esc(p.navn)}">${me ? "★ Min" : "Min?"}</button></div><div class="p" style="margin-top:8px">PT: ${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div>`; }).join("");
+    return `<div class="card" style="padding-left:18px;${me ? "box-shadow:inset 0 0 0 2px var(--now)" : ""}"><div style="display:flex;align-items:center;gap:12px">${patrolDot(p.farve, 30)}<div style="flex:1"><div class="n">${esc(p.navn)}</div><div class="names" style="margin-top:4px">${p.vejledere.map(personChip).join("")}</div></div><button class="pill ${me ? "on" : ""}" data-act="patrol:${esc(p.navn)}">${me ? "★ Min" : "Min?"}</button></div><div class="p" style="margin-top:8px">PT: ${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div>`; }).join("");
   if ((S.data.udenPatrulje || []).length) h += `<div class="hint">Uden patrulje på tavlen: ${S.data.udenPatrulje.map(esc).join(", ")}</div>`;
   return h;
 }
-// ---------- kontakter (krypteret pr. patrulje, egen kode) ----------
-async function decryptKontakter(navn, keyB64) {
-  const e = S.kontakter.patruljer[navn], key = await crypto.subtle.importKey("raw", b64d(keyB64), "AES-GCM", false, ["decrypt"]);
-  return JSON.parse(dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(e.iv), additionalData: enc.encode("lommeplan-kontakt") }, key, b64d(e.ct))));
+// ---------- teamkontakter ----------
+const phoneOf = n => (S.data.telefon || {})[whoIs(n)] || "";
+function openPerson(name) {
+  const t = phoneOf(name); if (!t) return;
+  const bg = document.createElement("div"); bg.className = "sheetbg";
+  bg.innerHTML = `<div class="sheet"><h1 style="font-size:22px">${esc(name)}</h1><div class="sub" style="font-size:15px;margin:4px 0 14px">${esc(t)}</div>
+    <div class="row2"><a class="btn" href="tel:${esc(t)}" style="text-decoration:none">Ring</a><a class="btn alt" href="sms:${esc(t)}" style="text-decoration:none">SMS</a></div>
+    <div class="row2"><button class="btn alt" data-x="copy">Kopiér nummer</button><button class="btn ghost" data-x="close">Luk</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.addEventListener("click", ev => { const x = ev.target.dataset.x; if (ev.target === bg || x === "close") bg.remove(); if (x === "copy") { try { navigator.clipboard.writeText(t); ev.target.textContent = "Kopieret ✓"; } catch {} } });
 }
-async function openKontakter(navn) {
-  if (!S.kontakter || !S.kontakter.patruljer[navn]) return alert("Ingen kontakter for denne patrulje.");
-  const bg = document.createElement("div"); bg.className = "sheetbg"; document.body.appendChild(bg);
-  const show = list => {
-    bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">${esc(navn)} · kontakter</h1><div class="sub">Kun til vejlederne i patruljen.</div>
-      ${list.map(c => `<div class="card" style="display:flex;align-items:center;gap:8px;padding-left:16px"><div style="flex:1"><div class="n">${esc(c.n)}</div><div class="p">${esc(c.t)}</div></div><a class="pill on" href="tel:${esc(c.t)}" style="text-decoration:none;color:var(--tx)">Ring</a><a class="pill on" href="sms:${esc(c.t)}" style="text-decoration:none;color:var(--tx)">SMS</a></div>`).join("") || '<div class="box muted">Ingen kontakter.</div>'}
-      <div class="row2"><button class="btn alt" data-x="lock">Lås</button><button class="btn" data-x="close">Luk</button></div></div>`;
-  };
-  const ask = err => {
-    bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">${esc(navn)} · kontakter</h1><div class="sub">Skriv patruljens kontaktkode (den har kun vejlederne fået).</div>
-      <div class="field"><input id="kk" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" style="text-transform:uppercase;text-align:center;font-weight:800;letter-spacing:.08em"></div><div class="err" role="alert">${esc(err || "")}</div>
-      <div class="row2"><button class="btn alt" data-x="close">Annullér</button><button class="btn" data-x="open">Åbn</button></div></div>`;
-  };
-  const stored = ls.get("lp_ck_" + navn);
-  if (stored) { try { return show(await decryptKontakter(navn, stored)); } catch { ls.del("lp_ck_" + navn); } }
-  ask("");
-  bg.addEventListener("click", async ev => {
-    const x = ev.target.dataset.x;
-    if (ev.target === bg || x === "close") return bg.remove();
-    if (x === "lock") { ls.del("lp_ck_" + navn); return bg.remove(); }
-    if (x === "open") {
-      const code = bg.querySelector("#kk").value, btn = ev.target; btn.textContent = "Tjekker …"; await new Promise(r => setTimeout(r, 30));
-      try { const k = await deriveKeyB64({ salt: S.kontakter.patruljer[navn].salt, iter: S.kontakter.iter }, code); const list = await decryptKontakter(navn, k); ls.set("lp_ck_" + navn, k); show(list); }
-      catch { ask("Forkert kode."); }
-    }
-  });
-}
+const personChip = n => phoneOf(n) ? `<button class="${whoIs(n) === S.me ? "me" : ""}" data-act="person:${esc(n)}" style="padding:5px 11px;border-radius:14px;background:var(--card2);font-size:13px">${esc(n)} 📞</button>` : `<span class="${whoIs(n) === S.me ? "me" : ""}">${esc(n)}</span>`;
 function openKort() {
   const bg = document.createElement("div"); bg.className = "sheetbg"; bg.style.alignItems = "stretch";
   bg.innerHTML = `<div style="background:var(--bg);width:100%;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top))"><b>Lejrpladser og PT-steder</b><button class="pill on" data-x="close" style="color:var(--tx)">Luk ✕</button></div><div style="overflow:auto;flex:1;-webkit-overflow-scrolling:touch"><img src="${S.data.lejrkort}" style="width:220%;max-width:none;display:block;background:#fff"></div></div>`;
@@ -709,7 +697,7 @@ document.addEventListener("click", ev => {
   else if (act === "plsetup") S.plSetup = true;
   else if (act === "patrol") { const nm = p.join(":"); if (ls.get("lp_patrol") === nm) ls.del("lp_patrol"); else ls.set("lp_patrol", nm); }
   else if (act === "kort") return openKort();
-  else if (act === "kontakt") return openKontakter(p.join(":"));
+  else if (act === "person") return openPerson(p.join(":"));
   else if (act === "plshift") { const t = now(); (S.pl.shifts = S.pl.shifts || {})[p.join(":")] = { t: String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0") }; savePl(); }
   else if (act === "plundo") { if (S.pl.shifts) delete S.pl.shifts[p.join(":")]; savePl(); }
   else if (act === "plmove") {
@@ -751,7 +739,8 @@ document.addEventListener("click", ev => {
   else if (act === "logout") { if (confirm("Glem nøglen? Du skal bruge dit link eller din kode igen.")) { ["lp_key", "lp_name", "lp_exp", "lp_onb"].forEach(ls.del); S.data = null; S.me = null; S.onb = 0; } }
   render();
 });
-document.addEventListener("input", ev => { const el = ev.target; if (el.dataset && el.dataset.plname !== undefined) { S.pl.names[+el.dataset.plname] = el.value; savePl(); } });
+document.addEventListener("input", ev => {
+  if (ev.target.id === "tq") { S.teamQ = ev.target.value; const pos = ev.target.selectionStart; render(); const el = document.getElementById("tq"); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; } const el = ev.target; if (el.dataset && el.dataset.plname !== undefined) { S.pl.names[+el.dataset.plname] = el.value; savePl(); } });
 document.addEventListener("change", ev => {
   const el = ev.target; if (!el.dataset || !el.dataset.act) return;
   const [act, ...p] = el.dataset.act.split(":");
@@ -810,5 +799,4 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
   render();
-  fetch("kontakter.enc.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : null)).then(k => { if (k && k.patruljer) { S.kontakter = k; if (/^#\/patruljer/.test(location.hash)) render(); } }).catch(() => {});
 })();
