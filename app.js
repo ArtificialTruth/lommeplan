@@ -115,12 +115,43 @@ const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" :
 const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
+function weekOverview(sel) {
+  const n = now(), today = ymd(n), W = 358, gx = 30, top = 44, ph = 17.5, T0 = 420, T1 = 1380, colw = (W - gx - 8) / 6, H = top + ((T1 - T0) / 60) * ph + 30;
+  const yy = m => top + ((m - T0) / 60) * ph, tm = t => +t.slice(0, 2) * 60 + +t.slice(3), nowm = n.getHours() * 60 + n.getMinutes();
+  const short = s => s.split(" (")[0].replace("Morgenvæk + Morgenmad", "Vækning").replace("Patruljens halve time", "Pat. ½ time").replace("Patruljens time", "Pat. time").replace("Lang madaktivitet", "Madaktivitet").replace("Afslutning på Høbjerghus", "Afslutning");
+  let s = `<svg class="ov" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ugeoverblik">`;
+  DAYS.forEach((d, i) => {
+    const x = gx + i * colw, on = i === sel;
+    s += `<rect class="dayhit" data-act="day:${i}" x="${x - 1}" y="${top - 4}" width="${colw}" height="${H - top - 20}" rx="8" fill="${on ? "none" : "transparent"}" ${on ? 'stroke="var(--act)" stroke-width="2"' : ""}/>`;
+    s += `<text class="ov-mu" data-act="day:${i}" x="${x + colw / 2 - 1}" y="${top - 18}" text-anchor="middle" font-size="10" font-weight="800" style="${on ? "fill:var(--act)" : ""}">${d.slice(0, 3)}</text><text class="ov-mu" data-act="day:${i}" x="${x + colw / 2 - 1}" y="${top - 7}" text-anchor="middle" font-size="9">${+DATES[i].slice(8)}</text>`;
+  });
+  for (let h = 7; h <= 23; h += 2) s += `<line x1="${gx - 2}" x2="${gx + 6 * colw}" y1="${yy(h * 60)}" y2="${yy(h * 60)}" class="ov-grid"/><text class="ov-mu" x="${gx - 6}" y="${yy(h * 60) + 3}" font-size="8" text-anchor="end">${String(h).padStart(2, "0")}</text>`;
+  for (const e of allEvents().filter(visible)) {
+    const di = dayIdx(e.dato), st = tm(e.start), en = Math.min(tm(e.slut), T1);
+    if (di < 0 || en <= st || st < T0) continue;
+    const x = gx + di * colw, y = yy(st) + .5, hh = ((en - st) / 60) * ph - 1.5, href = e.aktivitet ? `#/a/${e.aktivitet}` : `#/e/${e.id}`;
+    const past = at(e.dato, e.slut) <= n, isNow = at(e.dato, e.start) <= n && n < at(e.dato, e.slut);
+    if (e.maalgruppe === "team") { s += `<a href="${href}"><rect class="ov-t ${past ? "ov-past" : ""}" x="${x + colw - 9}" y="${y}" width="7" height="${Math.max(hh, 3)}" rx="2"/></a>`; continue; }
+    const wide = S.aud === "kursist" || S.aud === "begge" ? colw - 12 : colw - 4;
+    s += `<a href="${href}"><rect class="ov-k ${past ? "ov-past" : ""} ${isNow ? "ov-now" : ""}" x="${x + 1}" y="${y}" width="${wide}" height="${Math.max(hh, 3)}" rx="4"/>`;
+    if (hh >= 26) s += `<text class="ov-tx ${past ? "ov-past" : ""}" x="${x + 3.5}" y="${y + 10}" font-size="7" font-weight="700">${esc(short(e.titel).slice(0, 9))}</text>`;
+    if (isMine(e) && !past && hh >= 14) s += `<circle cx="${x + colw - 17}" cy="${y + hh - 5}" r="3" class="ov-mine"/>`;
+    s += `</a>`;
+  }
+  if (DATES.includes(today)) {
+    const ny = Math.min(Math.max(yy(nowm), top), yy(T1)), hm = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
+    s += `<line x1="${gx - 26}" x2="${gx + 6 * colw + 4}" y1="${ny}" y2="${ny}" class="ov-now-line"/><rect x="0" y="${ny - 7}" width="28" height="14" rx="7" class="ov-now-pill"/><text x="14" y="${ny + 3}" font-size="8" font-weight="800" text-anchor="middle" fill="#fff">${hm}</text>`;
+  }
+  return s + `</svg><div class="ovleg"><span><i class="k"></i>Kursist</span><span><i class="t"></i>Team</span><span><i class="m"></i>Mine</span><span><i class="n"></i>Nu</span><span><i class="p"></i>Færdig</span></div>`;
+}
+function scrollToDays() { const el = document.querySelector(".days"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
 function viewUge(arg) {
   const today = ymd(now());
   let i = arg !== undefined && arg !== "" ? +arg : today > DATES[5] ? 5 : Math.max(0, dayIdx(today));
   if (!(i >= 0 && i < 6)) i = 0;
   const date = DATES[i], ev = dayEvents(date), two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
   let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
+  h += `<div class="box ovbox"><div class="line" style="padding:0 0 4px"><h2 style="margin:0">Hele ugen</h2><span class="muted" style="font-size:11px">tryk på en dag</span></div>${weekOverview(i)}<button class="fold" data-act="todays" style="margin-top:6px">↓ Dagens program</button></div>`;
   h += `<div class="days">${DAYS.map((d, k) => `<button data-act="day:${k}" class="${k === i ? "on" : ""} ${DATES[k] === today ? "today" : ""} ${DATES[k] < today ? "gone" : ""}">${d.slice(0, 3)}<b>${+DATES[k].slice(8)}</b></button>`).join("")}</div>` + audSeg() + minePill();
   if (two) h += `<div class="lanehead"><span></span><span class="lh" style="color:var(--act)">KURSIST</span><span class="lh" style="color:var(--teamt)">TEAM<button data-act="aud:kursist" style="color:var(--mu)">✕</button></span></div>`;
   const starts = [...new Set(ev.map(e => e.start))].sort();
@@ -438,7 +469,7 @@ async function tryUnlock(pw) {
   S.data = d; S.exp = d.exp; S.pw = normPw(pw); S.me = ls.get("lp_name") || null;
   S.onb = ls.get("lp_onb") === "1" ? 0 : standalone() ? 2 : 1;
   if (S.onb === 2 && S.me) { S.onb = 0; ls.set("lp_onb", "1"); }
-  location.hash = "#/uge"; render(); scrollToNow(); return true;
+  location.hash = "#/uge"; render(); return true;
 }
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-act]"); if (!el || el.tagName === "INPUT" || el.tagName === "SELECT") return;
@@ -459,7 +490,8 @@ document.addEventListener("click", ev => {
   else if (act === "pick") { S.me = p.join(":"); ls.set("lp_name", S.me); S.onb = 0; ls.set("lp_onb", "1"); location.hash = "#/uge"; }
   else if (act === "install") { if (S.installEv) { S.installEv.prompt(); S.installEv = null; } }
   else if (act === "copy") { try { navigator.clipboard.writeText(S.pw); el.textContent = "Kopieret ✓"; } catch {} return; }
-  else if (act === "day") { location.hash = "#/uge/" + p[0]; return; }
+  else if (act === "day") { location.hash = "#/uge/" + p[0]; setTimeout(scrollToDays, 60); return; }
+  else if (act === "todays") { scrollToDays(); return; }
   else if (act === "edit") return openEdit(p[0], p.slice(1).join(":"));
   else if (act === "cal") {
     const [k, v] = [p[0], p.slice(1).join(":")];
@@ -506,7 +538,7 @@ window.addEventListener("hashchange", () => {
     if (S.data) { render(); window.scrollTo(0, 0); } else if (S.env) { S.loginErr = ""; tryUnlock(m[1]); }
     return;
   }
-  S.expand = false; render(); window.scrollTo(0, 0); scrollToNow(); });
+  S.expand = false; render(); window.scrollTo(0, 0); if (/^#\/uge\/\d/.test(location.hash)) setTimeout(scrollToDays, 40); });
 setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 30000);
 
 // ---------- start ----------
@@ -530,5 +562,5 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
     catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
-  render(); scrollToNow();
+  render();
 })();

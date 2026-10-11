@@ -97,3 +97,11 @@ nav.bar2 a i{display:block;font-style:normal;font-size:21px;line-height:1.2}nav.
 @media (prefers-reduced-motion:reduce){.card.now,.rec i{animation:none}.nowline{transition:none}}
 
 .grid .card,.card{padding-right:44px}.card .tags{right:8px}
+
+.ovbox{padding:12px 10px 10px}.ov{width:100%;height:auto;display:block;overflow:visible}
+.ov a{cursor:pointer}.ov-mu{fill:var(--mu)}.ov-grid{stroke:var(--line);stroke-width:.6;stroke-dasharray:2 3}
+.ov-k{fill:var(--ac)}.ov-t{fill:var(--team)}.ov-tx{fill:#000}.ov-mine{fill:var(--mine);stroke:#fff;stroke-width:.8}
+.ov-now{fill:var(--now);stroke:var(--rec);stroke-width:1.5}.ov-past{opacity:.35}
+.ov-now-line{stroke:var(--rec);stroke-width:1.6}.ov-now-pill{fill:var(--rec)}
+.ovleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10px;color:var(--mu);margin-top:6px}.ovleg i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.ovleg .k{background:var(--ac)}.ovleg .t{background:var(--team);width:5px}.ovleg .m{background:var(--mine);border-radius:50%;width:8px}.ovleg .n{background:var(--now);outline:1px solid var(--rec)}.ovleg .p{background:var(--ac);opacity:.35}
