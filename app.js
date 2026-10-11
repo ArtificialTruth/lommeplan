@@ -80,7 +80,18 @@ function mineAct(id) {
   const c = S.claim[id]; if (c === 1) return true; if (c === -1) return false;
   return !!(S.me && (a.bemanding.includes(S.me) || a.ansvarligNavne.includes(S.me)));
 }
-const isMine = e => !!(e.aktivitet && mineAct(e.aktivitet));
+function mineOn(id, dag) {   // dagsspecifik bemanding: Thorvald er kun "mine" de dage, han står på
+  const a = S.data.aktiviteter[id]; if (!a) return false;
+  const c = S.claim[id]; if (c === 1) return true; if (c === -1) return false;
+  if (!S.me) return false;
+  if (a.ansvarligNavne.includes(S.me)) return true;
+  const bd = a.bemandingDage || {};
+  if (Object.keys(bd).length) return (bd[dag] || []).includes(S.me);
+  const mine = (a.roller || []).filter(r => r.navne.some(n => whoIs(n) === S.me));
+  if (mine.length) return mine.some(r => !r.dage || !r.dage.length || r.dage.includes(dag));
+  return !(a.roller || []).length && a.bemanding.includes(S.me);
+}
+const isMine = e => !!(e.aktivitet && mineOn(e.aktivitet, e.dag));
 function visible(e) {
   if (S.hide[e.id] && !S.hideMode) return false;
   if (S.aud === "kursist" && e.maalgruppe !== "kursist") return false;
@@ -208,7 +219,9 @@ function viewAct(id, tab) {
     h += `<div class="prose">${paras(a.fantasi) || '<p class="muted">Ingen fantasiramme i beskrivelsen.</p>'}</div>`;
   } else {
     h += `<h2>Ansvarlig</h2><div class="prose"><p>${esc(a.ansvarlig) || "–"}</p></div>`;
-    if (a.roller && a.roller.length) {
+    if (a.bemandingDage && Object.keys(a.bemandingDage).length) {
+      h += `<h2>Pr. dag</h2>` + DAYS.filter(d => a.bemandingDage[d]).map(d => `<div class="box"><b>${d}</b><div class="names" style="margin-top:8px">${a.bemandingDage[d].map(n => `<span class="${n === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div></div>`).join("");
+    } else if (a.roller && a.roller.length) {
       if (a.bemandingTitel) h += `<h2>${esc(a.bemandingTitel)}</h2>`;
       const mineR = a.roller.filter(r => r.navne.some(n => whoIs(n) === S.me));
       if (mineR.length) h += `<div class="box" style="border:1.5px solid var(--mine)"><div class="muted">Din rolle</div><b>${mineR.map(r => esc(r.rolle) + (r.post ? " · " + esc(r.post) : "")).join("<br>")}</b></div>`;
@@ -219,7 +232,7 @@ function viewAct(id, tab) {
       }
       for (const n of a.bemandingNoter || []) h += `<div class="box muted">📝 ${esc(n)}</div>`;
     } else h += `<h2>Teamere</h2>`;
-    if (!(a.roller && a.roller.length)) h += a.bemanding.length ? `<div class="names">${a.bemanding.map(n => `<span class="${n === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div>` : `<p class="muted">Ingen bemanding fundet i beskrivelsen.</p>`;
+    if (!(a.roller && a.roller.length) && !(a.bemandingDage && Object.keys(a.bemandingDage).length)) h += a.bemanding.length ? `<div class="names">${a.bemanding.map(n => `<span class="${n === S.me ? "me" : ""}">${esc(n)}</span>`).join("")}</div>` : `<p class="muted">Ingen bemanding fundet i beskrivelsen.</p>`;
     if (a.bemandingRaa) h += `<details class="box"><summary>Original tekst</summary><div class="prose" style="margin-top:8px">${paras(a.bemandingRaa)}</div></details>`;
   }
   if (doc) h += `<a class="btn ghost" href="${esc(doc.docUrl)}" target="_blank" rel="noopener">🔗 Åbn original i Google Docs</a>`;
