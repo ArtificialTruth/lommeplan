@@ -430,10 +430,6 @@ function updateNowLine() {
   ln.firstElementChild.textContent = String(n.getHours()).padStart(2, "0") + ":" + String(n.getMinutes()).padStart(2, "0");
 }
 window.addEventListener("resize", updateNowLine);
-function scrollToNow() {
-  const el = document.querySelector(".grid .card.now") || [...document.querySelectorAll(".grid .card:not(.past)")][0];
-  if (el && document.querySelector(".days .today.on")) el.scrollIntoView({ block: "center" });
-}
 // ---------- router + events ----------
 function render() {
   if (S.data && S.onb) { $app.innerHTML = viewOnb(); return; }
@@ -538,7 +534,7 @@ window.addEventListener("hashchange", () => {
     if (S.data) { render(); window.scrollTo(0, 0); } else if (S.env) { S.loginErr = ""; tryUnlock(m[1]); }
     return;
   }
-  S.expand = false; render(); window.scrollTo(0, 0); if (/^#\/uge\/\d/.test(location.hash)) setTimeout(scrollToDays, 40); });
+  S.expand = false; render(); window.scrollTo(0, 0); });
 setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 30000);
 
 // ---------- start ----------
