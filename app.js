@@ -110,7 +110,7 @@ function evCard(e, o = {}) {
   }
   return `<a class="card ${e.maalgruppe === "team" ? "team" : ""} ${st} ${o.big ? "big" : ""}" href="${href}">
     <div class="t">${e.start} – ${e.slut}</div><div class="n">${esc(e.titel.split(" (")[0])}</div>${e.titel.includes(" (") ? `<div class="p">${esc(e.titel.slice(e.titel.indexOf(" (") + 2).replace(/\)$/, ""))}</div>` : ""}
-    ${a && a.sted && !/^startsted/i.test(a.sted) ? `<div class="p">📍 ${esc(a.sted)}</div>` : ""}${extra}
+    ${e.info ? `<div class="p">ℹ️ ${esc(e.info)}</div>` : ""}${a && a.sted && !/^startsted/i.test(a.sted) ? `<div class="p">📍 ${esc(a.sted)}</div>` : ""}${extra}
     ${tags ? `<div class="tags">${tags}</div>` : ""}${e.aktivitet ? `<button class="star ${mine ? "on" : ""}" data-act="claim:${e.aktivitet}" aria-label="${mine ? "Fjern fra mine" : "Det er min"}">${mine ? "★" : "☆"}</button>` : ""}</a>`;
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
@@ -154,6 +154,8 @@ function viewUge(arg) {
   if (!(i >= 0 && i < 6)) i = 0;
   const date = DATES[i], ev = dayEvents(date), two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
   let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
+  const dism = (() => { try { return JSON.parse(ls.get("lp_news", "[]")); } catch { return []; } })();
+  for (const nw of S.data.nyheder || []) if (today <= nw.til && !dism.includes(nw.id)) h += `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="line" style="padding:0 0 4px;align-items:flex-start"><b>📢 ${esc(nw.titel)}</b><button data-act="news:${esc(nw.id)}" aria-label="Luk" style="color:var(--mu);font-size:18px;padding:0 4px">✕</button></div><div style="font-size:14px">${esc(nw.tekst)}</div></div>`;
   h += `<div class="box ovbox"><div class="line" style="padding:0 0 4px"><h2 style="margin:0">Hele ugen</h2><span class="muted" style="font-size:11px">tryk på en dag</span></div>${weekOverview(i)}<button class="fold" data-act="todays" style="margin-top:6px">↓ Dagens program</button></div>`;
   h += `<div class="days">${DAYS.map((d, k) => `<button data-act="day:${k}" class="${k === i ? "on" : ""} ${DATES[k] === today ? "today" : ""} ${DATES[k] < today ? "gone" : ""}">${d.slice(0, 3)}<b>${+DATES[k].slice(8)}</b></button>`).join("")}</div>` + audSeg() + minePill();
   if (two) h += `<div class="lanehead"><span></span><span class="lh" style="color:var(--act)">KURSIST</span><span class="lh" style="color:var(--teamt)">TEAM<button data-act="aud:kursist" style="color:var(--mu)">✕</button></span></div>`;
@@ -223,7 +225,7 @@ function viewEvent(id) {
   if (!e) return `<a href="#/uge">‹ Tilbage</a><p>Ikke fundet.</p>`;
   return `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a><button class="pill on" data-act="edit:e:${id}" style="color:var(--tx);border-color:var(--line)">✎ Ret</button></div>
     <h1 style="margin-top:14px">${esc(e.titel)} ${e.rettet ? '<span class="chip edit">rettet</span>' : ""}</h1>
-    <div class="meta"><div>🕒 ${DAYS[dayIdx(e.dato)]} ${fmtD(e.dato)} · ${e.start}–${e.slut}</div><div>👥 ${e.maalgruppe === "team" ? "Team" : "Kursister"}</div></div>
+    <div class="meta"><div>🕒 ${DAYS[dayIdx(e.dato)]} ${fmtD(e.dato)} · ${e.start}–${e.slut}</div><div>👥 ${e.maalgruppe === "team" ? "Team" : "Kursister"}</div>${e.info ? `<div>ℹ️ ${esc(e.info)}</div>` : ""}</div>
     ${e.note ? `<div class="box" style="border:1.5px solid var(--mine)"><h2 style="margin:0 0 6px">Min note</h2>${paras(e.note)}</div>` : ""}
     <p class="muted">Ingen beskrivelse for dette punkt. Brug “Ret” til at tilføje en note.</p>`;
 }
@@ -610,6 +612,7 @@ document.addEventListener("click", ev => {
   else if (act === "mine") { S.mine = !S.mine; ls.set("lp_mine", S.mine ? "1" : "0"); }
   else if (act === "expand") S.expand = !S.expand;
   else if (act === "theme") { ls.set("lp_theme", p[0]); applyTheme(); }
+  else if (act === "news") { const id = p.join(":"); let d = []; try { d = JSON.parse(ls.get("lp_news", "[]")); } catch {} if (!d.includes(id)) d.push(id); ls.set("lp_news", JSON.stringify(d)); }
   else if (act === "ht") S.todoTab = p[0];
   else if (act === "pln") { S.pl.n = +p[0]; while (S.pl.names.length < S.pl.n) S.pl.names.push(""); savePl(); }
   else if (act === "plsave") { for (let i = 0; i < S.pl.n; i++) if (!(S.pl.names[i] || "").trim()) S.pl.names[i] = `Kursist ${i + 1}`; S.pl.names.length = S.pl.n; S.pl.ready = true; S.plSetup = false; savePl(); }
