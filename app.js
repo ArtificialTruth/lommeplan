@@ -156,13 +156,14 @@ function viewUge(arg) {
   const today = ymd(now());
   let i = arg !== undefined && arg !== "" ? +arg : today > DATES[5] ? 5 : Math.max(0, dayIdx(today));
   if (!(i >= 0 && i < 6)) i = 0;
-  const date = DATES[i], ev = dayEvents(date), two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
+  const date = DATES[i], evAll = dayEvents(date), pastEv = evAll.filter(e => status(e) === "past"), collapse = !S.showPast && !S.hideMode && pastEv.length > 0, ev = collapse ? evAll.filter(e => status(e) !== "past") : evAll, two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
   let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
   const dism = (() => { try { return JSON.parse(ls.get("lp_news", "[]")); } catch { return []; } })();
   for (const nw of S.data.nyheder || []) if (today <= nw.til && !dism.includes(nw.id)) h += `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="line" style="padding:0 0 4px;align-items:flex-start"><b>📢 ${esc(nw.titel)}</b><button data-act="news:${esc(nw.id)}" aria-label="Luk" style="color:var(--mu);font-size:18px;padding:0 4px">✕</button></div><div style="font-size:14px">${esc(nw.tekst)}</div></div>`;
   h += `<div class="box ovbox"><div class="line" style="padding:0 0 4px"><h2 style="margin:0">Hele ugen</h2><span class="muted" style="font-size:11px">tryk på en dag</span></div>${weekOverview(i)}<button class="fold" data-act="todays" style="margin-top:6px">↓ Dagens program</button></div>`;
   h += `<div class="days">${DAYS.map((d, k) => `<button data-act="day:${k}" class="${k === i ? "on" : ""} ${DATES[k] === today ? "today" : ""} ${DATES[k] < today ? "gone" : ""}">${d.slice(0, 3)}<b>${+DATES[k].slice(8)}</b></button>`).join("")}</div>` + audSeg() + minePill();
   if (two) h += `<div class="lanehead"><span></span><span class="lh" style="color:var(--act)">KURSIST</span><span class="lh" style="color:var(--teamt)">TEAM<button data-act="aud:kursist" style="color:var(--mu)">✕</button></span></div>`;
+  if (pastEv.length) h += `<button class="fold" data-act="past" style="margin:6px 0 10px">${collapse ? `▸ Færdige (${pastEv.length}) – ${pastEv.slice(0, 3).map(e => esc(e.titel.split(" (")[0])).join(", ")}${pastEv.length > 3 ? " …" : ""}` : "▾ Skjul færdige"}</button>`;
   const starts = [...new Set(ev.map(e => e.start))].sort();
   h += `<div class="grid ${two ? "two" : ""}">`;
   for (const s of starts) {
@@ -173,7 +174,8 @@ function viewUge(arg) {
   }
   if (date === today && ev.length) h += `<div class="nowline" id="nowline"><b></b></div>`;
   h += `</div>`;
-  if (!ev.length) h += `<div class="box muted">Ingen punkter med disse filtre.</div>`;
+  if (!ev.length && !pastEv.length) h += `<div class="box muted">Ingen punkter med disse filtre.</div>`;
+  else if (!ev.length) h += `<div class="box muted">Dagens program er slut.</div>`;
   const loose = Object.values(S.data.aktiviteter).filter(a => !S.data.events.some(e => e.aktivitet === a.id));
   if (loose.length && S.aud !== "team") h += `<h2>Uden fast tid</h2>` + loose.map(a => `<a class="card" href="#/a/${a.id}"><div class="t">Hele ugen / løbende</div><div class="n">${esc(a.titel)}</div></a>`).join("");
   return h;
@@ -618,6 +620,7 @@ document.addEventListener("click", ev => {
   else if (act === "expand") S.expand = !S.expand;
   else if (act === "theme") { ls.set("lp_theme", p[0]); applyTheme(); }
   else if (act === "news") { const id = p.join(":"); let d = []; try { d = JSON.parse(ls.get("lp_news", "[]")); } catch {} if (!d.includes(id)) d.push(id); ls.set("lp_news", JSON.stringify(d)); }
+  else if (act === "past") S.showPast = !S.showPast;
   else if (act === "hidemode") S.hideMode = !S.hideMode;
   else if (act === "hide") { const id = p.join(":"); S.hide[id] ? delete S.hide[id] : (S.hide[id] = 1); saveHide(); }
   else if (act === "unhideall") { S.hide = {}; saveHide(); }
