@@ -170,7 +170,8 @@ function viewUge(arg) {
   const date = DATES[i], evAll = dayEvents(date), pastEv = evAll.filter(e => status(e) === "past"), collapse = !S.showPast && !S.hideMode && pastEv.length > 0, ev = collapse ? evAll.filter(e => status(e) !== "past") : evAll, two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
   let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
   const dism = (() => { try { return JSON.parse(ls.get("lp_news", "[]")); } catch { return []; } })();
-  for (const nw of S.data.nyheder || []) if (today <= nw.til && !dism.includes(nw.id)) h += `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="line" style="padding:0 0 4px;align-items:flex-start"><b>📢 ${esc(nw.titel)}</b><button data-act="news:${esc(nw.id)}" aria-label="Luk" style="color:var(--mu);font-size:18px;padding:0 4px">✕</button></div><div style="font-size:14px">${esc(nw.tekst)}</div></div>`;
+  const LIVE_MS = 2 * 3600 * 1000;   // forældede beskeder skjules automatisk 2 timer efter udløb
+  for (const nw of S.data.nyheder || []) if (now().getTime() <= Date.parse(nw.til.length === 10 ? nw.til + "T23:59" : nw.til) + LIVE_MS && !dism.includes(nw.id)) h += `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="line" style="padding:0 0 4px;align-items:flex-start"><b>📢 ${esc(nw.titel)}</b><button data-act="news:${esc(nw.id)}" aria-label="Luk" style="color:var(--mu);font-size:18px;padding:0 4px">✕</button></div><div style="font-size:14px">${esc(nw.tekst)}</div></div>`;
   h += `<div class="box ovbox"><div class="line" style="padding:0 0 4px"><h2 style="margin:0">Hele ugen</h2><span class="muted" style="font-size:11px">tryk på en dag</span></div>${weekOverview(i)}</div>`;
   h += `<div class="days">${DAYS.map((d, k) => `<button data-act="day:${k}" class="${k === i ? "on" : ""} ${DATES[k] === today ? "today" : ""} ${DATES[k] < today ? "gone" : ""}">${d.slice(0, 3)}<b>${+DATES[k].slice(8)}</b></button>`).join("")}</div>` + audSeg() + minePill();
   if (two) h += `<div class="lanehead"><span></span><span class="lh" style="color:var(--act)">KURSIST</span><span class="lh" style="color:var(--teamt)">TEAM<button data-act="aud:kursist" style="color:var(--mu)">✕</button></span></div>`;
@@ -500,9 +501,41 @@ function viewPatruljer(sub) {
   }
   if (mp) h += `<div class="card now" style="padding-left:18px"><div class="t">DIN PATRULJE</div><div style="display:flex;align-items:center;gap:12px">${patrolDot(mp.farve, 34)}<div><div class="n">${esc(mp.navn)} · ${esc(mp.vejledere.join(" & "))}</div><div class="p">PT: ${esc(mp.pt)}</div></div></div></div>`;
   h += P.map(p => { const me = p.navn === my;
-    return `<div class="card" style="padding-left:18px;${me ? "box-shadow:inset 0 0 0 2px var(--now)" : ""}"><div style="display:flex;align-items:center;gap:12px">${patrolDot(p.farve, 30)}<div style="flex:1"><div class="n">${esc(p.navn)}</div><div class="names" style="margin-top:4px">${p.vejledere.map(v => `<span class="${whoIs(v) === S.me ? "me" : ""}">${esc(v)}</span>`).join("")}</div></div><button class="pill ${me ? "on" : ""}" data-act="patrol:${esc(p.navn)}">${me ? "★ Min" : "Min?"}</button></div><div class="p" style="margin-top:8px">PT: ${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div>`; }).join("");
+    return `<div class="card" style="padding-left:18px;${me ? "box-shadow:inset 0 0 0 2px var(--now)" : ""}"><div style="display:flex;align-items:center;gap:12px">${patrolDot(p.farve, 30)}<div style="flex:1"><div class="n">${esc(p.navn)}</div><div class="names" style="margin-top:4px">${p.vejledere.map(v => `<span class="${whoIs(v) === S.me ? "me" : ""}">${esc(v)}</span>`).join("")}</div></div>${S.kontakter && S.kontakter.patruljer[p.navn] ? `<button class="pill" data-act="kontakt:${esc(p.navn)}" aria-label="Kontakter">📇</button>` : ""}<button class="pill ${me ? "on" : ""}" data-act="patrol:${esc(p.navn)}">${me ? "★ Min" : "Min?"}</button></div><div class="p" style="margin-top:8px">PT: ${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div>`; }).join("");
   if ((S.data.udenPatrulje || []).length) h += `<div class="hint">Uden patrulje på tavlen: ${S.data.udenPatrulje.map(esc).join(", ")}</div>`;
   return h;
+}
+// ---------- kontakter (krypteret pr. patrulje, egen kode) ----------
+async function decryptKontakter(navn, keyB64) {
+  const e = S.kontakter.patruljer[navn], key = await crypto.subtle.importKey("raw", b64d(keyB64), "AES-GCM", false, ["decrypt"]);
+  return JSON.parse(dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(e.iv), additionalData: enc.encode("lommeplan-kontakt") }, key, b64d(e.ct))));
+}
+async function openKontakter(navn) {
+  if (!S.kontakter || !S.kontakter.patruljer[navn]) return alert("Ingen kontakter for denne patrulje.");
+  const bg = document.createElement("div"); bg.className = "sheetbg"; document.body.appendChild(bg);
+  const show = list => {
+    bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">${esc(navn)} · kontakter</h1><div class="sub">Kun til vejlederne i patruljen.</div>
+      ${list.map(c => `<div class="card" style="display:flex;align-items:center;gap:8px;padding-left:16px"><div style="flex:1"><div class="n">${esc(c.n)}</div><div class="p">${esc(c.t)}</div></div><a class="pill on" href="tel:${esc(c.t)}" style="text-decoration:none;color:var(--tx)">Ring</a><a class="pill on" href="sms:${esc(c.t)}" style="text-decoration:none;color:var(--tx)">SMS</a></div>`).join("") || '<div class="box muted">Ingen kontakter.</div>'}
+      <div class="row2"><button class="btn alt" data-x="lock">Lås</button><button class="btn" data-x="close">Luk</button></div></div>`;
+  };
+  const ask = err => {
+    bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">${esc(navn)} · kontakter</h1><div class="sub">Skriv patruljens kontaktkode (den har kun vejlederne fået).</div>
+      <div class="field"><input id="kk" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" style="text-transform:uppercase;text-align:center;font-weight:800;letter-spacing:.08em"></div><div class="err" role="alert">${esc(err || "")}</div>
+      <div class="row2"><button class="btn alt" data-x="close">Annullér</button><button class="btn" data-x="open">Åbn</button></div></div>`;
+  };
+  const stored = ls.get("lp_ck_" + navn);
+  if (stored) { try { return show(await decryptKontakter(navn, stored)); } catch { ls.del("lp_ck_" + navn); } }
+  ask("");
+  bg.addEventListener("click", async ev => {
+    const x = ev.target.dataset.x;
+    if (ev.target === bg || x === "close") return bg.remove();
+    if (x === "lock") { ls.del("lp_ck_" + navn); return bg.remove(); }
+    if (x === "open") {
+      const code = bg.querySelector("#kk").value, btn = ev.target; btn.textContent = "Tjekker …"; await new Promise(r => setTimeout(r, 30));
+      try { const k = await deriveKeyB64({ salt: S.kontakter.patruljer[navn].salt, iter: S.kontakter.iter }, code); const list = await decryptKontakter(navn, k); ls.set("lp_ck_" + navn, k); show(list); }
+      catch { ask("Forkert kode."); }
+    }
+  });
 }
 function openKort() {
   const bg = document.createElement("div"); bg.className = "sheetbg"; bg.style.alignItems = "stretch";
@@ -676,6 +709,7 @@ document.addEventListener("click", ev => {
   else if (act === "plsetup") S.plSetup = true;
   else if (act === "patrol") { const nm = p.join(":"); if (ls.get("lp_patrol") === nm) ls.del("lp_patrol"); else ls.set("lp_patrol", nm); }
   else if (act === "kort") return openKort();
+  else if (act === "kontakt") return openKontakter(p.join(":"));
   else if (act === "plshift") { const t = now(); (S.pl.shifts = S.pl.shifts || {})[p.join(":")] = { t: String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0") }; savePl(); }
   else if (act === "plundo") { if (S.pl.shifts) delete S.pl.shifts[p.join(":")]; savePl(); }
   else if (act === "plmove") {
@@ -776,4 +810,5 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
   render();
+  fetch("kontakter.enc.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : null)).then(k => { if (k && k.patruljer) { S.kontakter = k; if (/^#\/patruljer/.test(location.hash)) render(); } }).catch(() => {});
 })();

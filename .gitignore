@@ -1,0 +1,5 @@
+# kontaktfiler og hemmeligheder må aldrig i git
+*.vcf
+*.vcard
+*.csv
+secrets/
