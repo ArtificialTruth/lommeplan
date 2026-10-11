@@ -66,7 +66,7 @@ function evFull(e) {
   const o = S.over["e:" + e.id] || {};
   return { ...e, start: o.start || e.start, slut: o.slut || e.slut, titel: o.titel || e.titel, note: o.note || "", rettet: !!(o.start || o.slut || o.titel) };
 }
-const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde", "marie e": "Marie", alsa: "Asla" };
+const PALIAS = { bondo: "Marie", "mathilde m": "Mathilde", "marie e": "Marie", "marie b": "Marie", alsa: "Asla" };
 function whoIs(n) { const b = n.replace(/\(.*?\)/g, "").trim(); return PALIAS[b.toLowerCase()] || b; }
 function actFull(id) {
   const a = S.data.aktiviteter[id];
@@ -119,7 +119,7 @@ function evCard(e, o = {}) {
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
 const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button><button class="pill ${S.hideMode ? "on" : ""}" data-act="hidemode">${S.hideMode ? "Færdig med at skjule" : "Skjul punkter"}${Object.keys(S.hide).length && !S.hideMode ? " (" + Object.keys(S.hide).length + ")" : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
-const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
+const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["patruljer", "⚑", "Patruljer"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
 function weekOverview(sel) {
@@ -185,7 +185,7 @@ function viewAct(id, tab) {
   const a = actFull(id);
   if (!a) return `<a href="#/uge">‹ Tilbage</a><p>Aktiviteten findes ikke.</p>`;
   tab = tab || "resume";
-  const hasPl = PL_IDS.includes(id);
+  const hasPl = false;
   const evs = allEvents().filter(e => e.aktivitet === id);
   const doc = S.data.events.find(e => e.aktivitet === id && e.docUrl);
   const when = evs.length ? evs.map(e => `${DAYS[dayIdx(e.dato)]} ${e.start}–${e.slut}`).join(" · ") : a.tidTekst;
@@ -196,7 +196,7 @@ function viewAct(id, tab) {
     <div class="tabs">${[["resume", "Resumé"], ["tid", "Tidsplan"], ...(hasPl ? [["pl", "PL-plan"]] : []), ["fantasi", "Fantasi"], ["bem", "Bemanding"]].map(([k, l]) => `<a href="#/a/${id}/${k}" class="${tab === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
   h += `<button class="btn ${mineAct(id) ? "alt" : ""}" data-act="claim:${id}">${mineAct(id) ? "★ Det er min – tryk for at fjerne" : "☆ Det er min"}</button>`;
   if (a.note) h += `<div class="box" style="border:1.5px solid var(--mine)"><h2 style="margin:0 0 6px">Min note</h2>${paras(a.note)}</div>`;
-  if (hasPl && tab === "resume") h += `<h2>PL-skifteplan</h2>${plCard(id)}`;
+  if (PL_IDS.includes(id) && tab === "resume") h += `<h2>PL-skifteplan</h2>${plCard(id)}`;
   if (tab === "pl" && hasPl) { return h.replace(/<button class="btn[^"]*" data-act="claim:[^>]*>[^<]*<\/button>/, "") + viewPL(id); }
   if (tab === "resume") {
     h += `<h2>Formål</h2><div class="prose">${paras(a.formaal) || '<p class="muted">Ikke beskrevet.</p>'}</div>`;
@@ -372,13 +372,13 @@ function plState() {
 }
 const slotDone = (slot, st) => S.pl.done[slot] === 1 || (S.pl.done[slot] !== -1 && st.outgoing && st.outgoing.has(slot)) || (S.pl.done[slot] !== -1 && st.segs.filter(s => s.slot === slot).length > 0 && st.segs.filter(s => s.slot === slot).every(s => st.abs(s.dag, s.to) <= st.cur));
 function plCard(link) {
-  if (!S.pl.ready) return `<a class="card" href="#/a/${link}/pl"><div class="t">PL-skifteplan</div><div class="n">Opsæt patruljens PL-plan</div><div class="p">Skriv navnene, så husker appen, hvem der har været PL.</div></a>`;
+  if (!S.pl.ready) return `<a class="card" href="#/patruljer/pl"><div class="t">PL-skifteplan</div><div class="n">Opsæt patruljens PL-plan</div><div class="p">Skriv navnene, så husker appen, hvem der har været PL.</div></a>`;
   const st = plState(), col = PL_COL[S.pl.n], sw = c => `<i style="width:10px;height:34px;border-radius:3px;background:${c};flex:none"></i>`;
-  if (st.sk && !st.shiftedAt && st.to) return `<a class="card now" href="#/a/${link}/pl"><div class="t">PATRULJENS TIME · PL SKIFTER</div>
+  if (st.sk && !st.shiftedAt && st.to) return `<a class="card now" href="#/patruljer/pl"><div class="t">PATRULJENS TIME · PL SKIFTER</div>
     <div style="display:flex;align-items:center;gap:10px;margin:6px 0 10px">${sw(st.from ? col[st.from.slot] : "var(--line)")}<div><div class="n">${esc(st.from ? plName(st.from.slot) : "–")}</div><div class="p">går af som PL</div></div><b style="font-size:22px;color:var(--mu);margin:0 4px">→</b>${sw(col[st.to.slot])}<div><div class="n">${esc(plName(st.to.slot))}</div><div class="p">bliver PL</div></div></div>
     <button class="btn" data-act="plshift:${st.sk.id}" style="margin:0">Skift PL nu</button><div class="p" style="margin-top:6px">Skiftes automatisk, når Patruljens time slutter.</div></a>`;
   const who = st.pl ? `<div class="n">${esc(plName(st.pl.slot))}</div><div class="p">${st.shiftedAt ? `Skiftet kl. ${esc(st.shiftedAt)} · ` : ""}PL til ${DAYS[st.pl.dag].slice(0, 3)} ${st.pl.to}</div>` : `<div class="n">Ingen PL lige nu</div>${st.nextSeg ? `<div class="p">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}`;
-  return `<a class="card now" href="#/a/${link}/pl"><div class="t">NU ER PL</div><div style="display:flex;gap:10px;align-items:center">${sw(st.pl ? col[st.pl.slot] : "var(--line)")}<div style="flex:1">${who}</div>${st.shiftedAt && st.sk ? `<button data-act="plundo:${st.sk.id}" style="color:var(--act);font-weight:700;font-size:13px;padding:6px">Fortryd</button>` : ""}</div>${st.pl && st.nextSeg ? `<div class="p" style="margin-top:6px">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}</a>`;
+  return `<a class="card now" href="#/patruljer/pl"><div class="t">NU ER PL</div><div style="display:flex;gap:10px;align-items:center">${sw(st.pl ? col[st.pl.slot] : "var(--line)")}<div style="flex:1">${who}</div>${st.shiftedAt && st.sk ? `<button data-act="plundo:${st.sk.id}" style="color:var(--act);font-weight:700;font-size:13px;padding:6px">Fortryd</button>` : ""}</div>${st.pl && st.nextSeg ? `<div class="p" style="margin-top:6px">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}</a>`;
 }
 function plSvg() {
   const n = S.pl.n, col = PL_COL[n], W = 358, gx = 30, top = 22, ph = 17.5, T0 = 420, colw = (W - gx - 6) / 6, H = top + 16 * ph + 8, ed = S.plEdit;
@@ -461,6 +461,40 @@ function bindPlDrag() {
     });
     wrap.addEventListener("click", ev => { const b = ev.target.closest("[data-seg]"); if (b && S.plEdit && !ev.target.closest("[data-h]")) openPlBlock(b.dataset.seg); });
   }
+}
+
+// ---------- Patruljer ----------
+function myPatrolName() {
+  const o = ls.get("lp_patrol"); if (o) return o;
+  const p = (S.data.patruljer || []).find(p => p.vejledere.some(v => whoIs(v) === S.me));
+  return p ? p.navn : null;
+}
+const patrolDot = (c, s = 28) => `<i style="display:inline-block;width:${s}px;height:${s}px;border-radius:${Math.round(s / 4)}px;background:${c};${c === "#ffffff" ? "box-shadow:inset 0 0 0 1.5px var(--line)" : ""};flex:none"></i>`;
+function viewPatruljer(sub) {
+  sub = sub || "liste";
+  const P = S.data.patruljer || [], my = myPatrolName(), mp = P.find(p => p.navn === my);
+  let h = `<div class="top"><div><h1>Patruljer</h1><div class="sub">${P.length} patruljer · ${P.reduce((n, p) => n + p.vejledere.length, 0)} vejledere</div></div>${ALIEN}</div>
+    <div class="tabs" style="margin:12px -16px">${[["liste", "Patruljer"], ["pl", "PL-plan"], ["lejr", "Lejrplads"]].map(([k, l]) => `<a href="#/patruljer/${k}" class="${sub === k ? "on" : ""}">${l}</a>`).join("")}</div>`;
+  if (sub === "pl") {
+    h += mp ? `<div class="line" style="padding:0 0 4px">${patrolDot(mp.farve, 22)}<b style="flex:1">${esc(mp.navn)}</b><span class="muted">${esc(mp.vejledere.join(" & "))}</span></div>` : `<div class="box muted">Vælg din patrulje under “Patruljer”, så vi ved, hvem PL-planen gælder.</div>`;
+    return h + viewPL("pl");
+  }
+  if (sub === "lejr") {
+    h += `<div class="box" style="font-size:14px">Hver patrulje har sin egen lejrplads, så pladsen føles som deres egen og ikke som en lejrgade.<div class="row2" style="margin-top:10px"><div class="box" style="margin:0;flex:1"><div class="muted">Patruljeplads</div><b>10 × 10 m</b></div><div class="box" style="margin:0;flex:1"><div class="muted">Huggeplads</div><b>10 × 10 m</b></div></div></div>`;
+    if (S.data.lejrkort) h += `<h2>Fordeling af lejrpladser og PT-steder</h2><button class="box" data-act="kort" style="padding:6px;display:block;width:100%"><img src="${S.data.lejrkort}" alt="Kort over lejrpladser og PT-steder" style="width:100%;border-radius:10px;display:block"><div class="muted" style="padding:6px 4px 2px;text-align:right">Tryk for fuld skærm ⤢</div></button>`;
+    h += `<h2>PT-steder</h2>` + P.map(p => `<div class="card" style="display:flex;gap:12px;align-items:center;padding-left:18px">${patrolDot(p.farve, 24)}<div><div class="n">${esc(p.navn)}</div><div class="p">${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div></div>`).join("");
+    return h;
+  }
+  if (mp) h += `<div class="card now" style="padding-left:18px"><div class="t">DIN PATRULJE</div><div style="display:flex;align-items:center;gap:12px">${patrolDot(mp.farve, 34)}<div><div class="n">${esc(mp.navn)} · ${esc(mp.vejledere.join(" & "))}</div><div class="p">PT: ${esc(mp.pt)}</div></div></div></div>`;
+  h += P.map(p => { const me = p.navn === my;
+    return `<div class="card" style="padding-left:18px;${me ? "box-shadow:inset 0 0 0 2px var(--now)" : ""}"><div style="display:flex;align-items:center;gap:12px">${patrolDot(p.farve, 30)}<div style="flex:1"><div class="n">${esc(p.navn)}</div><div class="names" style="margin-top:4px">${p.vejledere.map(v => `<span class="${whoIs(v) === S.me ? "me" : ""}">${esc(v)}</span>`).join("")}</div></div><button class="pill ${me ? "on" : ""}" data-act="patrol:${esc(p.navn)}">${me ? "★ Min" : "Min?"}</button></div><div class="p" style="margin-top:8px">PT: ${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div>`; }).join("");
+  if ((S.data.udenPatrulje || []).length) h += `<div class="hint">Uden patrulje på tavlen: ${S.data.udenPatrulje.map(esc).join(", ")}</div>`;
+  return h;
+}
+function openKort() {
+  const bg = document.createElement("div"); bg.className = "sheetbg"; bg.style.alignItems = "stretch";
+  bg.innerHTML = `<div style="background:var(--bg);width:100%;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top))"><b>Lejrpladser og PT-steder</b><button class="pill on" data-x="close" style="color:var(--tx)">Luk ✕</button></div><div style="overflow:auto;flex:1;-webkit-overflow-scrolling:touch"><img src="${S.data.lejrkort}" style="width:220%;max-width:none;display:block;background:#fff"></div></div>`;
+  document.body.appendChild(bg); bg.addEventListener("click", ev => { if (ev.target.dataset.x === "close") bg.remove(); });
 }
 
 function viewLogin() {
@@ -582,6 +616,7 @@ function render() {
   else if (r === "uge") h = viewUge(a);
   else if (r === "mine") h = viewMine();
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
+  else if (r === "patruljer") { h = viewPatruljer(a); tab = "patruljer"; }
   else { h = viewUge(a); tab = "uge"; }
   $app.innerHTML = h + nav(tab);
   updateNowLine(); bindPlDrag();
@@ -626,6 +661,8 @@ document.addEventListener("click", ev => {
   else if (act === "pln") { S.pl.n = +p[0]; while (S.pl.names.length < S.pl.n) S.pl.names.push(""); savePl(); }
   else if (act === "plsave") { for (let i = 0; i < S.pl.n; i++) if (!(S.pl.names[i] || "").trim()) S.pl.names[i] = `Kursist ${i + 1}`; S.pl.names.length = S.pl.n; S.pl.ready = true; S.plSetup = false; savePl(); }
   else if (act === "plsetup") S.plSetup = true;
+  else if (act === "patrol") { const nm = p.join(":"); if (ls.get("lp_patrol") === nm) ls.del("lp_patrol"); else ls.set("lp_patrol", nm); }
+  else if (act === "kort") return openKort();
   else if (act === "plshift") { const t = now(); (S.pl.shifts = S.pl.shifts || {})[p.join(":")] = { t: String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0") }; savePl(); }
   else if (act === "plundo") { if (S.pl.shifts) delete S.pl.shifts[p.join(":")]; savePl(); }
   else if (act === "plmove") {
