@@ -863,6 +863,27 @@ window.addEventListener("hashchange", () => {
   S.expand = false; render(); window.scrollTo(0, 0); });
 setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 30000);
 
+// ---------- opdateringer ----------
+function showUpdate() {
+  if (document.getElementById("upd")) return;
+  const b = document.createElement("button"); b.id = "upd"; b.textContent = "Ny version er klar – tryk for at opdatere ⟳";
+  b.onclick = async () => { b.textContent = "Opdaterer …"; try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); } catch {} location.reload(); };
+  document.body.appendChild(b);
+}
+async function checkVersion() {
+  try { const v = await (await fetch("version.json?_=" + Date.now(), { cache: "no-store" })).json(); if (v.v && window.LP_V && v.v !== window.LP_V && window.LP_V !== "0") showUpdate(); } catch {}
+}
+async function refreshData() {   // ny plan uden genstart: hent og dekryptér stille
+  const key = ls.get("lp_key"); if (!S.data || !key || document.querySelector(".sheetbg")) return;
+  try {
+    const env = await (await fetch("data.enc.json", { cache: "no-cache" })).json(), d = await decryptData(env, key);
+    if (d.genereret !== S.data.genereret || JSON.stringify(d.nyheder) !== JSON.stringify(S.data.nyheder)) { S.data = d; S.idx = null; render(); }
+  } catch {}
+}
+function periodic() { checkVersion(); refreshData(); }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") periodic(); });
+setInterval(periodic, 5 * 60 * 1000);
+
 // ---------- start ----------
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.installEv = e; if (S.onb === 1) render(); });
 (async function boot() {
@@ -884,5 +905,5 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
     catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
-  render();
+  render(); checkVersion();
 })();
