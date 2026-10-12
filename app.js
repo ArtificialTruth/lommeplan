@@ -600,16 +600,14 @@ function snippet(text, q) {
 }
 function soegResultater(q) {
   q = (q || "").trim(); if (q.length < 2) return `<div class="muted" style="padding:10px 2px">Skriv et spørgsmål eller et ord, fx navn, sted eller aktivitet. Søgningen kører kun på din telefon.</div>`;
-  let mp = "";
-  if (/min(e)? (patrulje|vejleder)|hvilken patrulje/i.test(q)) { const my = (S.data.patruljer || []).find(p => p.navn === myPatrolName()); if (my) mp = `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="muted" style="font-size:11px;font-weight:800">HURTIGT SVAR</div><a href="#/patruljer/liste" style="text-decoration:none;color:var(--tx)"><b>Din patrulje er ${esc(my.navn)}</b><div>Vejledere: ${esc(my.vejledere.join(" & "))} · PT: ${esc(my.pt)}</div></a></div>`; }
-  const res = searchPlan(q); if (!res.length && !mp) return `<div class="box muted">Ingen svar i planen. Prøv et andet ord.</div>`;
+  const res = searchPlan(S.me ? q.replace(/\b(min|mit|mine)\b/gi, S.me).replace(/\bjeg\b/gi, S.me) : q); if (!res.length) return `<div class="box muted">Ingen svar i planen. Prøv et andet ord.</div>`;
   const icon = { akt: "📄", event: "🕒", rolle: "👥", patrulje: "⚑", team: "📞", nyhed: "📢", husk: "☑" };
   const top = res.find(r => r.d.typ === "event" && r.s > res[0].s * .6);
   let h = top ? `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="muted" style="font-size:11px;font-weight:800">HURTIGT SVAR</div><a href="${top.d.href}" style="text-decoration:none;color:var(--tx)"><b>${esc(top.d.titel)}</b><div>${esc(top.d.tekst)}</div></a></div>` : "";
-  return mp + h + res.map(r => `<a class="card" href="${r.d.href}" style="padding-left:16px"><div class="t">${icon[r.d.typ] || ""} ${esc(r.d.extra || r.d.typ)}</div><div class="n">${esc(r.d.titel)}</div><div class="p" style="font-size:13px;color:var(--tx);opacity:.85">${snippet(r.d.tekst, q)}</div></a>`).join("");
+  return h + res.map(r => `<a class="card" href="${r.d.href}" style="padding-left:16px"><div class="t">${icon[r.d.typ] || ""} ${esc(r.d.extra || r.d.typ)}</div><div class="n">${esc(r.d.titel)}</div><div class="p" style="font-size:13px;color:var(--tx);opacity:.85">${snippet(r.d.tekst, q)}</div></a>`).join("");
 }
 function viewSoeg() {
-  const ex = ["Hvornår er lejrbål?", "Hvem er min patrulje?", "Hvor starter Bevis-løb?", "Hvem står på Morgenvæk i morgen?", "Nødkuvert"];
+  const ex = ["Hvornår er lejrbål?", ...(S.me ? [`Hvilken patrulje er ${S.me} i?`, `Hvad skal ${S.me} i dag?`] : []), "Hvor starter Bevis-løb?", "Hvem står på Morgenvæk i morgen?", "Nødkuvert"];
   return `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a>${ALIEN}</div><h1 style="margin-top:12px">Spørg planen</h1><div class="sub">Søger i aktiviteter, bemanding, program og patruljer. Virker uden net.</div>
     <input id="sq" type="search" placeholder="Fx: hvornår er aftensmad?" value="${esc(S.sq || "")}" autocomplete="off" style="margin:12px 0 8px;font-size:17px">
     <div class="chips">${ex.map(x => `<button class="pill" data-act="sq:${esc(x)}">${esc(x)}</button>`).join("")}</div><div id="sres">${soegResultater(S.sq)}</div>`;
