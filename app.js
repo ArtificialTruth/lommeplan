@@ -168,7 +168,7 @@ function viewUge(arg) {
   let i = arg !== undefined && arg !== "" ? +arg : today > DATES[5] ? 5 : Math.max(0, dayIdx(today));
   if (!(i >= 0 && i < 6)) i = 0;
   const date = DATES[i], evAll = dayEvents(date), pastEv = evAll.filter(e => status(e) === "past"), collapse = !S.showPast && !S.hideMode && pastEv.length > 0, ev = collapse ? evAll.filter(e => status(e) !== "past") : evAll, two = S.aud === "begge" && ev.some(e => e.maalgruppe === "team");
-  let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div>${ALIEN}</div>`;
+  let h = `<div class="top"><div><h1>Ugen</h1><div class="sub">${fmtD(DATES[0])}–${fmtD(DATES[5])} 2026</div></div><div style="display:flex;gap:10px;align-items:center"><a href="#/soeg" class="pill on" style="text-decoration:none;color:var(--tx);border-color:var(--line)">🔎 Søg</a>${ALIEN}</div></div>`;
   const dism = (() => { try { return JSON.parse(ls.get("lp_news", "[]")); } catch { return []; } })();
   const LIVE_MS = 2 * 3600 * 1000;   // forældede beskeder skjules automatisk 2 timer efter udløb
   for (const nw of S.data.nyheder || []) if (now().getTime() <= Date.parse(nw.til.length === 10 ? nw.til + "T23:59" : nw.til) + LIVE_MS && !dism.includes(nw.id)) h += `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="line" style="padding:0 0 4px;align-items:flex-start"><b>📢 ${esc(nw.titel)}</b><button data-act="news:${esc(nw.id)}" aria-label="Luk" style="color:var(--mu);font-size:18px;padding:0 4px">✕</button></div><div style="font-size:14px">${esc(nw.tekst)}</div>${nw.kontakt ? `<a class="pill on" href="#/patruljer/team/${encodeURIComponent(nw.kontakt)}" style="display:inline-block;margin-top:8px;text-decoration:none;color:var(--tx)">📞 ${esc(nw.kontakt)}</a>` : ""}</div>`;
@@ -532,6 +532,89 @@ function openKort() {
   document.body.appendChild(bg); bg.addEventListener("click", ev => { if (ev.target.dataset.x === "close") bg.remove(); });
 }
 
+// ---------- Søg i planen (BM25 i browseren, ingen AI, intet forlader telefonen) ----------
+const STOP = new Set("og i på er der til af en et de den det som for med at om har har skal vil kan fra ved men ikke også så jeg vi du man hvad hvor hvem hvornår hvilken hvilke min mit mine".split(" "));
+const tok = s => (String(s || "").toLowerCase().match(/\d{1,2}[:.]\d{2}|[a-zæøå0-9]+/g) || []).map(t => t.replace(".", ":"));
+function chunk(text, n = 280) {
+  const out = []; let cur = "";
+  for (const p of String(text || "").split(/\n+/).map(x => x.trim()).filter(Boolean)) {
+    for (const s of p.split(/(?<=[.!?])\s+/)) { if ((cur + " " + s).length > n && cur) { out.push(cur); cur = s; } else cur = cur ? cur + " " + s : s; }
+    if (cur) { out.push(cur); cur = ""; }
+  }
+  return out;
+}
+function buildIndex() {
+  const docs = [], add = (typ, titel, tekst, href, extra = "") => docs.push({ typ, titel, tekst, href, extra });
+  const D = S.data;
+  for (const a of Object.values(D.aktiviteter)) {
+    const base = `#/a/${a.id}`, t = a.titel.split(" (")[0];
+    add("akt", t, `${a.titel}. Sted: ${a.sted || ""}. Ansvarlig: ${a.ansvarlig || ""}. ${a.tidTekst || ""}`, base, "sted");
+    for (const [lab, txt, tab] of [["Formål", a.formaal, "resume"], ["Koncept", a.koncept, "resume"], ["God energi", a.godEnergi, "resume"], ["Spræng rammerne", a.spraengRammerne, "resume"], ["Fantasi", a.fantasi, "fantasi"]]) for (const c of chunk(txt)) add("akt", t, c, `${base}/${tab}`, lab);
+    for (const r of a.tidsplan || []) add("akt", t, `${r.tid} ${r.tekst}`, `${base}/tid`, "Tidsplan");
+    for (const h of a.huskepunkter || []) add("husk", t, h, `${base}`, "Husk");
+    for (const r of a.roller || []) add("rolle", t, `${r.rolle}${r.post ? " (" + r.post + ")" : ""}: ${r.navne.join(", ")} ${r.tid || ""} ${r.note || ""}`, `${base}/bem`, "Bemanding");
+    for (const [d, ns] of Object.entries(a.bemandingDage || {})) add("rolle", t, `${d}: ${ns.join(", ")}`, `${base}/bem`, "Bemanding");
+    if (!(a.roller || []).length && !Object.keys(a.bemandingDage || {}).length && a.bemanding.length) add("rolle", t, `Bemanding: ${a.bemanding.join(", ")}`, `${base}/bem`, "Bemanding");
+  }
+  for (const e of D.events) {
+    const a = e.aktivitet && D.aktiviteter[e.aktivitet];
+    add("event", e.titel.split(" (")[0], `${e.dag} ${fmtD(e.dato)} kl. ${e.start}–${e.slut}. ${e.maalgruppe === "team" ? "Team." : "Kursister."} ${e.info || ""} ${a && a.sted && !/^startsted/i.test(a.sted) ? a.sted : ""}`, e.aktivitet ? `#/a/${e.aktivitet}` : `#/e/${e.id}`, "Program");
+  }
+  for (const p of D.patruljer || []) add("patrulje", `Patrulje ${p.navn}`, `Vejledere: ${p.vejledere.join(", ")}. PT-sted: ${p.pt}. Lejrplads: ${p.lejr}.`, "#/patruljer/liste", "Patrulje");
+  for (const n of D.personer) { const pp = (D.patruljer || []).find(p => p.vejledere.some(v => whoIs(v) === n)); add("team", n, `Teamer ${pp ? "i patrulje " + pp.navn : ""}. Telefon og kontakt.`, `#/patruljer/team/${encodeURIComponent(n)}`, "Team"); }
+  for (const n of D.nyheder || []) add("nyhed", n.titel, n.tekst, "#/uge", "Besked");
+  // BM25-indeks
+  const inv = new Map(); let total = 0;
+  docs.forEach((d, i) => { const ts = [...tok(d.titel), ...tok(d.titel), ...tok(d.titel), ...tok(d.tekst)].filter(t => !STOP.has(t)); d.len = ts.length; total += ts.length; const tf = new Map(); ts.forEach(t => tf.set(t, (tf.get(t) || 0) + 1)); tf.forEach((c, t) => { if (!inv.has(t)) inv.set(t, []); inv.get(t).push([i, c]); }); });
+  return { docs, inv, avg: total / docs.length, terms: [...inv.keys()] };
+}
+function searchPlan(q) {
+  if (!S.idx) S.idx = buildIndex();
+  const { docs, inv, avg, terms } = S.idx, ql = q.toLowerCase(), today = ymd(now());
+  let extra = "";
+  if (/i dag|idag/.test(ql)) extra += " " + (DAYS[dayIdx(today)] || "");
+  if (/i morgen|imorgen/.test(ql)) extra += " " + (DAYS[dayIdx(today) + 1] || "");
+  const qt = [...tok(q + extra)].filter(t => !STOP.has(t));
+  const scores = new Map(), N = docs.length, k1 = 1.2, b = .75;
+  for (const t of new Set(qt)) {
+    const variants = new Map([[t, 1]]);
+    const stem = t.replace(/(erne|ene|er|en|et|e|s)$/, ""); if (stem.length >= 3 && stem !== t) variants.set(stem, .8);
+    for (const [v, w] of [...variants]) if (v.length >= 3) for (const term of terms) if (term !== v && term.startsWith(v)) variants.set(term, Math.min(variants.get(term) || 0, 1) || .6 * w);
+    for (const [v, w] of variants) {
+      const post = inv.get(v); if (!post) continue;
+      const idf = Math.log(1 + (N - post.length + .5) / (post.length + .5));
+      for (const [i, c] of post) scores.set(i, (scores.get(i) || 0) + w * idf * (c * (k1 + 1)) / (c + k1 * (1 - b + b * docs[i].len / avg)));
+    }
+  }
+  const hvornaar = /hvornår|kl\b|tid\b|starter|slutter/.test(ql), hvem = /hvem|vejleder|bemand|står på|patrulje|ring|telefon|nummer/.test(ql), hvor = /hvor\b|sted|lokation|mødes|starter ved|find/.test(ql);
+  const boost = d => (hvornaar && d.typ === "event" ? 1.7 : 1) * (hvem && (d.typ === "rolle" || d.typ === "patrulje" || d.typ === "team") ? 1.6 : 1) * (hvor && (d.typ === "event" || d.extra === "sted" || d.typ === "patrulje") ? 1.5 : 1) * (d.typ === "nyhed" ? 1.3 : 1);
+  return [...scores].map(([i, s]) => ({ d: docs[i], s: s * boost(docs[i]) })).sort((a, b) => b.s - a.s).slice(0, 12);
+}
+function snippet(text, q) {
+  const qs = [...new Set(tok(q).filter(t => !STOP.has(t) && t.length >= 2))], low = text.toLowerCase();
+  let at0 = qs.map(t => low.indexOf(t.replace(":", "[:]"))).filter(i => i >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const from = Math.max(0, at0 - 50), part = text.slice(from, from + 190);
+  let h = esc((from > 0 ? "…" : "") + part + (from + 190 < text.length ? "…" : ""));
+  for (const t of qs) h = h.replace(new RegExp("(" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[a-zæøå0-9]*)", "gi"), "<mark>$1</mark>");
+  return h;
+}
+function soegResultater(q) {
+  q = (q || "").trim(); if (q.length < 2) return `<div class="muted" style="padding:10px 2px">Skriv et spørgsmål eller et ord, fx navn, sted eller aktivitet. Søgningen kører kun på din telefon.</div>`;
+  let mp = "";
+  if (/min(e)? (patrulje|vejleder)|hvilken patrulje/i.test(q)) { const my = (S.data.patruljer || []).find(p => p.navn === myPatrolName()); if (my) mp = `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="muted" style="font-size:11px;font-weight:800">HURTIGT SVAR</div><a href="#/patruljer/liste" style="text-decoration:none;color:var(--tx)"><b>Din patrulje er ${esc(my.navn)}</b><div>Vejledere: ${esc(my.vejledere.join(" & "))} · PT: ${esc(my.pt)}</div></a></div>`; }
+  const res = searchPlan(q); if (!res.length && !mp) return `<div class="box muted">Ingen svar i planen. Prøv et andet ord.</div>`;
+  const icon = { akt: "📄", event: "🕒", rolle: "👥", patrulje: "⚑", team: "📞", nyhed: "📢", husk: "☑" };
+  const top = res.find(r => r.d.typ === "event" && r.s > res[0].s * .6);
+  let h = top ? `<div class="box" style="border:2px solid var(--now);background:var(--card2)"><div class="muted" style="font-size:11px;font-weight:800">HURTIGT SVAR</div><a href="${top.d.href}" style="text-decoration:none;color:var(--tx)"><b>${esc(top.d.titel)}</b><div>${esc(top.d.tekst)}</div></a></div>` : "";
+  return mp + h + res.map(r => `<a class="card" href="${r.d.href}" style="padding-left:16px"><div class="t">${icon[r.d.typ] || ""} ${esc(r.d.extra || r.d.typ)}</div><div class="n">${esc(r.d.titel)}</div><div class="p" style="font-size:13px;color:var(--tx);opacity:.85">${snippet(r.d.tekst, q)}</div></a>`).join("");
+}
+function viewSoeg() {
+  const ex = ["Hvornår er lejrbål?", "Hvem er min patrulje?", "Hvor starter Bevis-løb?", "Hvem står på Morgenvæk i morgen?", "Nødkuvert"];
+  return `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a>${ALIEN}</div><h1 style="margin-top:12px">Spørg planen</h1><div class="sub">Søger i aktiviteter, bemanding, program og patruljer. Virker uden net.</div>
+    <input id="sq" type="search" placeholder="Fx: hvornår er aftensmad?" value="${esc(S.sq || "")}" autocomplete="off" style="margin:12px 0 8px;font-size:17px">
+    <div class="chips">${ex.map(x => `<button class="pill" data-act="sq:${esc(x)}">${esc(x)}</button>`).join("")}</div><div id="sres">${soegResultater(S.sq)}</div>`;
+}
+
 function viewLogin() {
   return `<div class="login">${ALIEN.replace('class="alien"', 'class="alien" style="width:90px;height:90px"')}<h1 style="font-size:30px">Lommeplan</h1><div class="sub">PLanstar 2026 · for teamere</div>
     <form id="lf"><div class="field" style="margin-top:40px;text-align:left"><label>Din kode</label><input id="code" value="${esc(S.loginDraft || "")}" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></div>
@@ -651,6 +734,7 @@ function render() {
   else if (r === "uge") h = viewUge(a);
   else if (r === "mine") h = viewMine();
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
+  else if (r === "soeg") { h = viewSoeg(); tab = "uge"; }
   else if (r === "patruljer") { h = viewPatruljer(a, b); tab = "patruljer"; }
   else { h = viewUge(a); tab = "uge"; }
   $app.innerHTML = h + nav(tab);
@@ -690,6 +774,7 @@ document.addEventListener("click", ev => {
   else if (act === "theme") { ls.set("lp_theme", p[0]); applyTheme(); }
   else if (act === "news") { const id = p.join(":"); let d = []; try { d = JSON.parse(ls.get("lp_news", "[]")); } catch {} if (!d.includes(id)) d.push(id); ls.set("lp_news", JSON.stringify(d)); }
   else if (act === "past") S.showPast = !S.showPast;
+  else if (act === "sq") { S.sq = p.join(":"); }
   else if (act === "hidemode") S.hideMode = !S.hideMode;
   else if (act === "hide") { const id = p.join(":"); S.hide[id] ? delete S.hide[id] : (S.hide[id] = 1); saveHide(); }
   else if (act === "unhideall") { S.hide = {}; saveHide(); }
@@ -742,6 +827,7 @@ document.addEventListener("click", ev => {
   render();
 });
 document.addEventListener("input", ev => {
+  if (ev.target.id === "sq") { S.sq = ev.target.value; const el = document.getElementById("sres"); if (el) el.innerHTML = soegResultater(S.sq); return; }
   if (ev.target.id === "tq") { S.teamQ = ev.target.value; const pos = ev.target.selectionStart; render(); const el = document.getElementById("tq"); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; } const el = ev.target; if (el.dataset && el.dataset.plname !== undefined) { S.pl.names[+el.dataset.plname] = el.value; savePl(); } });
 document.addEventListener("change", ev => {
   const el = ev.target; if (!el.dataset || !el.dataset.act) return;
