@@ -416,7 +416,7 @@ function viewPL(id) {
     let h = `<h2>Antal i patruljen</h2><div class="seg" style="margin-top:0">${[6, 7].map(k => `<button data-act="pln:${k}" class="${n === k ? "on" : ""}">${k} kursister</button>`).join("")}</div>
       <h2>Navne · hvem er PL hvornår <span style="font-weight:400;text-transform:none;letter-spacing:0">· brug ▲▼ til at flytte et navn</span></h2><div id="pllist">`;
     for (let i = 0; i < n; i++) { const f = plTpl().find(s => s.slot === i); h += `<div class="card plrow" data-i="${i}" style="display:flex;align-items:center;gap:8px;padding:8px 8px 8px 18px"><i style="position:absolute;left:0;top:0;bottom:0;width:6px;background:${col[i]}"></i><div style="width:62px;flex:none"><b style="font-size:13px">${i + 1}. PL</b><div class="muted" style="font-size:10px">${f ? DAYS[f.dag].slice(0, 3) + " " + f.from : ""}</div></div><input data-plname="${i}" value="${esc(S.pl.names[i] || "")}" placeholder="Navn ${i + 1}" style="flex:1;min-width:0"><div style="display:flex;flex-direction:column;gap:2px;flex:none"><button class="mv" data-act="plmove:${i}:-1" aria-label="Flyt op" ${i === 0 ? "disabled" : ""}>▲</button><button class="mv" data-act="plmove:${i}:1" aria-label="Flyt ned" ${i === n - 1 ? "disabled" : ""}>▼</button></div></div>`; }
-    return h + `<button class="btn" data-act="plsave">Gem patrulje</button><div class="hint">Navnene gemmes kun på din telefon.</div>`;
+    return h + `<button class="btn" data-act="plsave">Gem patrulje</button><button class="btn ghost" data-act="plpaste">⤓ Har du fået en plan? Indsæt den her</button><div class="hint">Navnene gemmes kun på din telefon.</div>`;
   }
   const st = plState();
   let h = `<div style="margin-top:12px">${plCard(id)}</div>`;
@@ -434,7 +434,54 @@ function viewPL(id) {
       <div class="ovleg">${[...Array(n).keys()].map(i => `<span><i style="background:${col[i]};width:9px"></i>${esc(plName(i))}</span>`).join("")}<span><i style="background:#14161a"></i>PT = PL skifter</span></div>
       ${S.plEdit ? `<div class="hint">Træk i kanten af en blok for at ændre tiden. Tryk på en blok for at skifte person eller slette den.</div><div class="row2"><button class="btn alt" data-act="pladd">+ Ny blok</button><button class="btn ghost" data-act="plreset">Nulstil skema</button></div>` : ""}</div>`;
   }
-  return h + `<button class="btn ghost" data-act="plsetup">Rediger navne og antal</button>`;
+  return h + `<div class="row2"><button class="btn alt" data-act="plcopy">⧉ Kopiér plan</button><button class="btn alt" data-act="plpaste">⤓ Indsæt plan</button></div><button class="btn ghost" data-act="plsetup">Rediger navne og antal</button>`;
+}
+// ---------- del PL-plan som krypteret tekst ----------
+const b64u = u8 => btoa(String.fromCharCode(...u8)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+async function streamBytes(stream) { return new Uint8Array(await new Response(stream).arrayBuffer()); }
+async function plExport() {
+  const keyB64 = ls.get("lp_key"); if (!keyB64) throw new Error("Ingen nøgle");
+  const payload = { v: 1, t: new Date().toISOString().slice(0, 16), patrulje: myPatrolName() || "", pl: { n: S.pl.n, names: S.pl.names, ready: S.pl.ready, tpl: S.pl.tpl, done: S.pl.done, shifts: S.pl.shifts || {} } };
+  let bytes = enc.encode(JSON.stringify(payload)), tag = "LP1.";
+  if (typeof CompressionStream !== "undefined") { bytes = await streamBytes(new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"))); tag = "LP1c."; }
+  const key = await crypto.subtle.importKey("raw", b64d(keyB64), "AES-GCM", false, ["encrypt"]), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode("lommeplan-pl") }, key, bytes));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+  return tag + b64u(out);
+}
+async function plImport(text) {
+  const m = String(text).trim().replace(/\s+/g, "").match(/(LP1c?\.[A-Za-z0-9_-]+)/); if (!m) throw new Error("Teksten ser ikke ud som en delt PL-plan.");
+  const comp = m[1].startsWith("LP1c."), raw = unb64u(m[1].slice(comp ? 5 : 4)), key = await crypto.subtle.importKey("raw", b64d(ls.get("lp_key")), "AES-GCM", false, ["decrypt"]);
+  let bytes = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12), additionalData: enc.encode("lommeplan-pl") }, key, raw.slice(12)));
+  if (comp) bytes = await streamBytes(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")));
+  const o = JSON.parse(dec.decode(bytes)); if (o.v !== 1 || !o.pl) throw new Error("Ukendt format.");
+  return o;
+}
+function openPlShare(mode) {
+  const bg = document.createElement("div"); bg.className = "sheetbg"; document.body.appendChild(bg);
+  const close = () => bg.remove(), msg = t => { const el = bg.querySelector(".err"); if (el) el.textContent = t; };
+  if (mode === "copy") {
+    bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">Kopiér PL-plan</h1><div class="sub">Krypteret tekst med navne, tider og hvem der har været PL. Send den i en besked. Kun Lommeplan kan læse den.</div><div class="field"><textarea id="plt" readonly style="min-height:110px;font-size:12px;word-break:break-all">Laver tekst …</textarea></div><div class="err" role="alert"></div>
+      <div class="row2"><button class="btn" data-x="copy">Kopiér</button>${navigator.share ? '<button class="btn alt" data-x="share">Del …</button>' : ""}</div><button class="btn ghost" data-x="close">Luk</button></div>`;
+    plExport().then(t => { bg.querySelector("#plt").value = t; }).catch(e => msg(String(e.message || e)));
+    bg.addEventListener("click", async ev => {
+      const x = ev.target.dataset.x, ta = bg.querySelector("#plt");
+      if (ev.target === bg || x === "close") return close();
+      if (x === "copy") { try { await navigator.clipboard.writeText(ta.value); ev.target.textContent = "Kopieret ✓"; } catch { ta.select(); msg("Markér og kopiér teksten selv."); } }
+      if (x === "share") { try { await navigator.share({ text: ta.value }); } catch {} }
+    });
+  } else {
+    bg.innerHTML = `<div class="sheet"><h1 style="font-size:20px">Indsæt PL-plan</h1><div class="sub">Indsæt den krypterede tekst, du har fået. Din nuværende PL-plan bliver erstattet.</div><div class="field"><textarea id="plt" placeholder="LP1c.…" style="min-height:110px;font-size:12px"></textarea></div><div class="err" role="alert"></div><div id="plp"></div>
+      <div class="row2"><button class="btn alt" data-x="close">Annullér</button><button class="btn" data-x="read">Læs</button></div></div>`;
+    let parsed = null;
+    bg.addEventListener("click", async ev => {
+      const x = ev.target.dataset.x;
+      if (ev.target === bg || x === "close") return close();
+      if (x === "read") { try { parsed = await plImport(bg.querySelector("#plt").value); const p = parsed.pl; msg(""); bg.querySelector("#plp").innerHTML = `<div class="box"><b>${p.n} kursister${parsed.patrulje ? " · " + esc(parsed.patrulje) : ""}</b><div class="muted">${esc((p.names || []).join(", "))}</div><div class="hint">Lavet ${esc(parsed.t)}</div></div>`; ev.target.textContent = "Erstat min plan"; ev.target.dataset.x = "apply"; } catch (e) { msg(e.name === "OperationError" ? "Kunne ikke åbnes. Teksten er ændret, eller den kommer fra en anden version af koden." : String(e.message || e)); } return; }
+      if (x === "apply" && parsed) { const p = parsed.pl; S.pl = { ...S.pl, n: p.n, names: p.names || [], ready: true, tpl: p.tpl || {}, done: p.done || {}, shifts: p.shifts || {} }; S.plSetup = false; savePl(); close(); render(); }
+    });
+  }
 }
 function openPlBlock(id) {
   const sg = plTpl().find(s => s.id === id); if (!sg) return;
@@ -811,6 +858,8 @@ document.addEventListener("click", ev => {
   else if (act === "pln") { S.pl.n = +p[0]; while (S.pl.names.length < S.pl.n) S.pl.names.push(""); savePl(); }
   else if (act === "plsave") { for (let i = 0; i < S.pl.n; i++) if (!(S.pl.names[i] || "").trim()) S.pl.names[i] = `Kursist ${i + 1}`; S.pl.names.length = S.pl.n; S.pl.ready = true; S.plSetup = false; savePl(); }
   else if (act === "plsetup") S.plSetup = true;
+  else if (act === "plcopy") return openPlShare("copy");
+  else if (act === "plpaste") return openPlShare("paste");
   else if (act === "patrol") { const nm = p.join(":"); if (ls.get("lp_patrol") === nm) ls.del("lp_patrol"); else ls.set("lp_patrol", nm); }
   else if (act === "kort") return openKort();
   else if (act === "person") return openPerson(p.join(":"));
