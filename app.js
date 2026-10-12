@@ -236,6 +236,7 @@ function viewAct(id, tab) {
     if (!(a.roller && a.roller.length) && !(a.bemandingDage && Object.keys(a.bemandingDage).length)) h += a.bemanding.length ? `<div class="names">${a.bemanding.map(n => `${personChip(n)}`).join("")}</div>` : `<p class="muted">Ingen bemanding fundet i beskrivelsen.</p>`;
     if (a.bemandingRaa) h += `<details class="box"><summary>Original tekst</summary><div class="prose" style="margin-top:8px">${paras(a.bemandingRaa)}</div></details>`;
   }
+  if (tab === "resume" && (S.data.memer || {})[id]) h += `<h2>Aktiviteten i ét meme</h2><div class="box" style="padding:8px">${memeSvg(S.data.memer[id])}</div>`;
   if (doc) h += `<a class="btn ghost" href="${esc(doc.docUrl)}" target="_blank" rel="noopener">🔗 Åbn original i Google Docs</a>`;
   return h;
 }
@@ -611,6 +612,36 @@ function viewSoeg() {
   return `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a>${ALIEN}</div><h1 style="margin-top:12px">Spørg planen</h1><div class="sub">Søger i aktiviteter, bemanding, program og patruljer. Virker uden net.</div>
     <input id="sq" type="search" placeholder="Fx: hvornår er aftensmad?" value="${esc(S.sq || "")}" autocomplete="off" style="margin:12px 0 8px;font-size:17px">
     <div class="chips">${ex.map(x => `<button class="pill" data-act="sq:${esc(x)}">${esc(x)}</button>`).join("")}</div><div id="sres">${soegResultater(S.sq)}</div>`;
+}
+
+// ---------- memer (SVG, tegnet i appen) ----------
+const MEME_BG = { star: ["#1b1f5e", "#6a2fa0"], train: ["#0f4c5c", "#1b8a6b"], tent: ["#14532d", "#2f855a"], pause: ["#3b1c5a", "#b83280"], moon: ["#0b1030", "#2a3b8f"], sun: ["#c05621", "#f6ad55"], flag: ["#1a365d", "#2b6cb0"], cup: ["#744210", "#d69e2e"], magnifier: ["#22543d", "#38a169"], pot: ["#7b341e", "#dd6b20"], fire: ["#2d1b0e", "#c53030"], alien: ["#064e3b", "#10b981"], stopwatch: ["#1e3a5f", "#e53e3e"], ufo: ["#0b1030", "#2c7a7b"], flask: ["#44337a", "#38b2ac"], disco: ["#521b64", "#d53f8c"] };
+function memeIcon(k) {
+  const f = (d, c, x = "") => `<path d="${d}" fill="${c}" ${x}/>`, R = (x, y, w, h, c, r = 6) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${c}"/>`, C = (x, y, r, c, s = "") => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}" ${s}/>`;
+  switch (k) {
+    case "star": return f("M180 100 L192 133 L228 135 L200 157 L210 191 L180 172 L150 191 L160 157 L132 135 L168 133Z", "#fde047", 'stroke="#fff" stroke-width="3"');
+    case "train": return R(120, 118, 120, 62, "#e2e8f0", 10) + R(130, 128, 28, 24, "#2b6cb0", 4) + R(166, 128, 28, 24, "#2b6cb0", 4) + R(202, 128, 28, 24, "#2b6cb0", 4) + R(120, 160, 120, 8, "#e53e3e", 0) + C(145, 188, 9, "#1a202c") + C(215, 188, 9, "#1a202c") + `<rect x="100" y="198" width="160" height="5" fill="#a0aec0"/>`;
+    case "tent": return f("M180 100 L250 190 L110 190Z", "#fbd38d", 'stroke="#fff" stroke-width="3"') + f("M180 135 L204 190 L156 190Z", "#744210");
+    case "pause": return R(142, 108, 28, 84, "#fff", 8) + R(190, 108, 28, 84, "#fff", 8);
+    case "moon": return f("M205 105 A52 52 0 1 0 235 175 A42 42 0 1 1 205 105Z", "#fef3c7") + C(250, 112, 3, "#fff") + C(120, 120, 2.5, "#fff") + C(262, 160, 2, "#fff") + C(140, 98, 2, "#fff");
+    case "sun": return C(180, 150, 34, "#fde047") + [0, 45, 90, 135, 180, 225, 270, 315].map(a => `<line x1="${180 + 44 * Math.cos(a * Math.PI / 180)}" y1="${150 + 44 * Math.sin(a * Math.PI / 180)}" x2="${180 + 62 * Math.cos(a * Math.PI / 180)}" y2="${150 + 62 * Math.sin(a * Math.PI / 180)}" stroke="#fde047" stroke-width="7" stroke-linecap="round"/>`).join("");
+    case "flag": return R(130, 98, 7, 100, "#e2e8f0", 3) + f("M137 102 L222 112 L137 136Z", "#e53e3e");
+    case "cup": return R(140, 125, 80, 66, "#fff", 10) + `<path d="M220 140 q28 4 0 36" stroke="#fff" stroke-width="9" fill="none"/>` + `<path d="M158 112 q8 -12 0 -22 M180 112 q8 -12 0 -22 M202 112 q8 -12 0 -22" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".7"/>`;
+    case "magnifier": return C(168, 140, 42, "none", 'stroke="#fff" stroke-width="12"') + `<line x1="200" y1="172" x2="244" y2="216" stroke="#fff" stroke-width="16" stroke-linecap="round"/>`;
+    case "pot": return R(128, 140, 104, 54, "#2d3748", 12) + R(118, 134, 124, 12, "#4a5568", 6) + `<path d="M150 124 q8 -14 0 -26 M180 124 q8 -14 0 -26 M210 124 q8 -14 0 -26" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" opacity=".75"/>`;
+    case "fire": return f("M180 98 C205 128 222 148 210 176 C204 192 156 192 150 176 C140 152 162 140 168 116 C174 126 180 118 180 98Z", "#f6ad55", 'stroke="#fff" stroke-width="3"') + f("M180 140 C194 154 200 166 192 178 C186 188 170 188 166 178 C162 166 176 158 180 140Z", "#fde047") + R(130, 196, 100, 12, "#744210", 6);
+    case "alien": return f("M180 98 C225 98 232 150 202 182 C190 194 170 194 158 182 C128 150 135 98 180 98Z", "#bbf7d0", 'stroke="#fff" stroke-width="3"') + f("M146 136 Q168 142 172 168 Q148 168 142 148Z", "#052e16") + f("M214 136 Q192 142 188 168 Q212 168 218 148Z", "#052e16");
+    case "stopwatch": return C(180, 156, 48, "#fff") + C(180, 156, 40, "#1e293b") + R(172, 98, 16, 14, "#fff", 3) + `<line x1="180" y1="156" x2="180" y2="124" stroke="#fff" stroke-width="5" stroke-linecap="round"/><line x1="180" y1="156" x2="204" y2="168" stroke="#fb7185" stroke-width="5" stroke-linecap="round"/>`;
+    case "ufo": return `<path d="M150 188 L120 230 H240 L210 188Z" fill="#fde047" opacity=".35"/>` + f("M150 150 A30 30 0 0 1 210 150Z", "#9ae6b4") + `<ellipse cx="180" cy="158" rx="68" ry="20" fill="#cbd5e0" stroke="#fff" stroke-width="3"/>` + C(145, 160, 5, "#fde047") + C(180, 164, 5, "#fde047") + C(215, 160, 5, "#fde047");
+    case "flask": return f("M164 100 H196 V140 L226 192 Q230 206 214 206 H146 Q130 206 134 192 L164 140Z", "rgba(255,255,255,.35)", 'stroke="#fff" stroke-width="4"') + f("M150 176 H210 L226 196 Q228 204 214 204 H146 Q132 204 134 196Z", "#68d391") + C(172, 160, 5, "#fff") + C(188, 150, 4, "#fff") + C(180, 130, 3, "#fff");
+    case "disco": return C(180, 156, 50, "#e2e8f0") + [-30, 0, 30].map(y => `<ellipse cx="180" cy="${156 + y}" rx="50" ry="${Math.max(6, 50 - Math.abs(y) * 1.2)}" fill="none" stroke="#a0aec0" stroke-width="2"/>`).join("") + [-30, 0, 30].map(x => `<line x1="${180 + x}" y1="106" x2="${180 + x}" y2="206" stroke="#a0aec0" stroke-width="2"/>`).join("") + R(176, 86, 8, 22, "#a0aec0", 2);
+    default: return "";
+  }
+}
+function memeSvg(m) {
+  const [c1, c2] = MEME_BG[m.ikon] || MEME_BG.alien, top = m.top.split("\n"), bot = m.bottom.split("\n"), fs = lines => Math.min(26, Math.floor(336 / (0.68 * Math.max(...lines.map(l => l.length)))));
+  const T = (lines, y0, up) => { const s = fs(lines), lh = s * 1.12; return lines.map((l, i) => `<text x="180" y="${y0 + (up ? i * lh : (i - (lines.length - 1)) * lh)}" text-anchor="middle" font-family="Impact,Haettenschweiler,'Arial Black',sans-serif" font-weight="900" font-size="${s}" fill="#fff" stroke="#000" stroke-width="${s / 5}" stroke-linejoin="round" paint-order="stroke">${esc(l)}</text>`).join(""); };
+  return `<svg viewBox="0 0 360 300" role="img" aria-label="Meme: ${esc(m.top.replace(/\n/g, " "))} ${esc(m.bottom.replace(/\n/g, " "))}" style="width:100%;border-radius:14px;display:block"><defs><linearGradient id="mg${esc(m.ikon)}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="360" height="300" fill="url(#mg${esc(m.ikon)})"/>${memeIcon(m.ikon)}${T(top, 34, true)}${T(bot, 282, false)}</svg>`;
 }
 
 function viewLogin() {
