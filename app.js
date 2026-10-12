@@ -93,7 +93,6 @@ function mineOn(id, dag) {   // dagsspecifik bemanding: Thorvald er kun "mine" d
 }
 const isMine = e => !!(e.aktivitet && mineOn(e.aktivitet, e.dag));
 function visible(e) {
-  if (S.hide[e.id] && !S.hideMode) return false;
   if (S.aud === "kursist" && e.maalgruppe !== "kursist") return false;
   if (S.aud === "team" && e.maalgruppe !== "team") return false;
   if (S.mine && e.aktivitet && S.data.aktiviteter[e.aktivitet] && !isMine(e)) return false;
@@ -130,7 +129,7 @@ function evCard(e, o = {}) {
     ${tags ? `<div class="tags">${tags}</div>` : ""}${S.hideMode ? `<button class="star hidebtn" data-act="hide:${e.id}" aria-label="${hid ? "Vis igen" : "Skjul"}">${hid ? "↺" : "✕"}</button>` : e.aktivitet ? `<button class="star ${mine ? "on" : ""}" data-act="claim:${e.aktivitet}" aria-label="${mine ? "Fjern fra mine" : "Det er min"}">${mine ? "★" : "☆"}</button>` : ""}</a>`;
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
-const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button><button class="pill ${S.hideMode ? "on" : ""}" data-act="hidemode">${S.hideMode ? "Færdig med at skjule" : "Skjul punkter"}${Object.keys(S.hide).length && !S.hideMode ? " (" + Object.keys(S.hide).length + ")" : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
+const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
 const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["patruljer", "⚑", "Patruljer"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
@@ -270,7 +269,6 @@ function viewMine() {
     <div class="hint">Tip: vælg en ny kalender, fx “PLanstar 2026”, så du kan slette alt samlet bagefter.</div></div>
     <h2>Mine data</h2><div class="box"><div class="muted">Dine rettelser, huskeliste og valg gemmes kun på denne telefon, og opdateringer af appen sletter dem ikke. Tag en sikkerhedskopi, hvis du skifter telefon eller rydder browserdata.</div>${nOver ? `<div class="hint">${nOver} rettede felter.${orphans ? ` ${orphans} hører til punkter, der er ændret i planen, og vises ikke længere.` : ""}</div>` : ""}
     <div class="row2"><button class="btn alt" data-act="exp">Sikkerhedskopi</button><label class="btn alt" style="margin:10px 0">Indlæs kopi<input type="file" accept="application/json,.json" data-act="imp" hidden></label></div>
-    ${Object.keys(S.hide).length ? `<button class="btn ghost" data-act="unhideall">Vis ${Object.keys(S.hide).length} skjulte punkter igen</button>` : ""}
     ${nOver ? '<button class="btn ghost" data-act="resetall">Nulstil alle rettelser</button>' : ""}</div>
     <h2>Avanceret</h2><div class="box"><button class="btn alt" data-act="guide">Vis installationsguide</button><div class="field"><label>Demo-tid (test af “Nu”)</label><input type="datetime-local" data-act="demo" value="${esc(S.demo || "")}"></div>
     ${S.demo ? '<button class="btn alt" data-act="demooff">Brug rigtig tid</button>' : ""}
@@ -584,7 +582,7 @@ function openEdit(kind, id) {
 const actKey = e => e.aktivitet ? "a" + e.aktivitet : "t" + e.titel;
 function calSelect() {
   const c = S.cal;
-  let ev = allEvents().filter(e => !S.hide[e.id] && (c.aud === "begge" || e.maalgruppe === c.aud) && c.days.includes(dayIdx(e.dato)) && !c.skip.includes(actKey(e)));
+  let ev = allEvents().filter(e => (c.aud === "begge" || e.maalgruppe === c.aud) && c.days.includes(dayIdx(e.dato)) && !c.skip.includes(actKey(e)));
   if (c.mine) ev = ev.filter(e => isMine(e));
   ev.sort((a, b) => a.dato.localeCompare(b.dato) || a.start.localeCompare(b.start));
   // flerdags-aktivitet (fx patruljens halve døgn): slå sammen når første slutter sent og næste starter tidligt næste dag
