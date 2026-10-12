@@ -607,7 +607,7 @@ function soegResultater(q) {
   return h + res.map(r => `<a class="card" href="${r.d.href}" style="padding-left:16px"><div class="t">${icon[r.d.typ] || ""} ${esc(r.d.extra || r.d.typ)}</div><div class="n">${esc(r.d.titel)}</div><div class="p" style="font-size:13px;color:var(--tx);opacity:.85">${snippet(r.d.tekst, q)}</div></a>`).join("");
 }
 function viewSoeg() {
-  const ex = ["Hvornår er lejrbål?", ...(S.me ? [`Hvilken patrulje er ${S.me} i?`, `Hvad skal ${S.me} i dag?`] : []), "Hvor starter Bevis-løb?", "Hvem står på Morgenvæk i morgen?", "Nødkuvert"];
+  const ex = ["Hvornår er lejrbål?", ...(S.me ? [S.me] : []), "Hvor starter Bevis-løb?", "Hvem står på Morgenvæk i morgen?", "Nødkuvert"];
   return `<div class="top"><a href="javascript:history.back()" style="text-decoration:none">‹ Tilbage</a>${ALIEN}</div><h1 style="margin-top:12px">Spørg planen</h1><div class="sub">Søger i aktiviteter, bemanding, program og patruljer. Virker uden net.</div>
     <input id="sq" type="search" placeholder="Fx: hvornår er aftensmad?" value="${esc(S.sq || "")}" autocomplete="off" style="margin:12px 0 8px;font-size:17px">
     <div class="chips">${ex.map(x => `<button class="pill" data-act="sq:${esc(x)}">${esc(x)}</button>`).join("")}</div><div id="sres">${soegResultater(S.sq)}</div>`;
