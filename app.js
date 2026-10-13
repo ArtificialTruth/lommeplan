@@ -563,7 +563,6 @@ function viewPatruljer(sub, hi) {
     return h;
   }
   if (sub === "lejr") {
-    h += `<div class="box" style="font-size:14px">Hver patrulje har sin egen lejrplads, så pladsen føles som deres egen og ikke som en lejrgade.<div class="row2" style="margin-top:10px"><div class="box" style="margin:0;flex:1"><div class="muted">Patruljeplads</div><b>10 × 10 m</b></div><div class="box" style="margin:0;flex:1"><div class="muted">Huggeplads</div><b>10 × 10 m</b></div></div></div>`;
     if (S.data.lejrkort) h += `<h2>Fordeling af lejrpladser og PT-steder</h2><button class="box" data-act="kort" style="padding:6px;display:block;width:100%"><img src="${S.data.lejrkort}" alt="Kort over lejrpladser og PT-steder" style="width:100%;border-radius:10px;display:block"><div class="muted" style="padding:6px 4px 2px;text-align:right">Tryk for fuld skærm ⤢</div></button>`;
     h += `<h2>PT-steder</h2>` + P.map(p => `<div class="card" style="display:flex;gap:12px;align-items:center;padding-left:18px">${patrolDot(p.farve, 24)}<div><div class="n">${esc(p.navn)}</div><div class="p">${esc(p.pt)} · lejrplads ${esc(p.lejr)}</div></div></div>`).join("");
     return h;
