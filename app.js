@@ -206,6 +206,38 @@ function viewUge(arg) {
   return h;
 }
 
+// Tidsplan med levende status: grå fortid, blinkende prik ved "nu"
+function planRows(a, evs) {
+  const rows = a.tidsplan || [], n = now(), WD = { søn: 0, man: 1, tir: 2, ons: 3, tor: 4, fre: 5 };
+  const dates = [...new Set(evs.map(e => e.dato))].sort(); if (!rows.length || !dates.length) return null;
+  const parse = (base) => {
+    let off = dayIdx(base), prev = -1, out = [];
+    for (const r of rows) {
+      const ts = [...r.tid.matchAll(/(\d{1,2})[:.](\d{2})/g)].map(m => +m[1] * 60 + +m[2]); if (!ts.length) { out.push(null); continue; }
+      const wd = r.tid.match(/\((søn|man|tir|ons|tor|fre)/i); if (wd) off = WD[wd[1].toLowerCase()]; else if (prev >= 0 && ts[0] < prev - 360) off++;
+      prev = ts[0];
+      const s = new Date(`${DATES[Math.max(0, off)]}T${hhmm(ts[0])}:00`); let e = ts[1] !== undefined ? new Date(`${DATES[Math.max(0, off)]}T${hhmm(ts[1])}:00`) : null; if (e && e <= s) e = new Date(e.getTime() + 864e5);
+      out.push({ s, e });
+    }
+    for (let i = 0; i < out.length; i++) if (out[i] && !out[i].e) { const nx = out.slice(i + 1).find(Boolean); out[i].e = nx ? nx.s : new Date(out[i].s.getTime() + 36e5); }
+    return out;
+  };
+  let best = null;
+  for (const d of dates) { const t = parse(d), v = t.filter(Boolean); if (!v.length) continue; best = best || t; if (n >= v[0].s && n < v[v.length - 1].e) { best = t; break; } }
+  return best;
+}
+function tidslinje(a, evs) {
+  const times = planRows(a, evs), n = now();
+  if (!a.tidsplan.length) return `<div class="box muted">Beskrivelsen har ingen tidsplan som liste.</div>`;
+  let h = `<div class="tline">`, placed = false;
+  a.tidsplan.forEach((r, i) => {
+    const t = times && times[i], st = !t ? "" : t.e <= n ? "past" : t.s <= n ? "now" : "future";
+    if (!placed && t && st === "future" && i > 0 && times[i - 1] && times[i - 1].e <= n && times.slice(0, i).some(x => x && x.e <= n)) { placed = true; h += `<div class="it livemark"><div class="tm" style="color:var(--rec)">● nu · ${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}</div></div>`; }
+    if (st === "now") placed = true;
+    h += `<div class="it ${st}"><div class="tm">${esc(r.tid)}${st === "now" ? ' <span class="rec" style="margin-left:6px"><i></i>NU</span>' : ""}</div><div class="tx">${esc(r.tekst)}</div></div>`;
+  });
+  return h + `</div>`;
+}
 function viewAct(id, tab) {
   const a = actFull(id);
   if (!a) return `<a href="#/uge">‹ Tilbage</a><p>Aktiviteten findes ikke.</p>`;
@@ -228,7 +260,7 @@ function viewAct(id, tab) {
     if (a.koncept) h += `<h2>Koncept</h2><div class="prose ${S.expand ? "" : "clamp"}">${paras(a.koncept)}</div><button class="fold" data-act="expand">${S.expand ? "Vis mindre" : "Læs hele konceptet ▾"}</button>`;
     if (a.godEnergi || a.spraengRammerne) h += `<h2>God energi / Spræng rammerne</h2><div class="prose">${paras(a.godEnergi)}${paras(a.spraengRammerne)}</div>`;
   } else if (tab === "tid") {
-    h += a.tidsplan.length ? `<div class="tline">${a.tidsplan.map(r => `<div class="it"><div class="tm">${esc(r.tid)}</div><div class="tx">${esc(r.tekst)}</div></div>`).join("")}</div>` : `<div class="box muted">Beskrivelsen har ingen tidsplan som liste.</div>`;
+    h += tidslinje(a, evs);
   } else if (tab === "fantasi") {
     h += `<div class="prose">${paras(a.fantasi) || '<p class="muted">Ingen fantasiramme i beskrivelsen.</p>'}</div>`;
   } else {
@@ -956,7 +988,7 @@ window.addEventListener("hashchange", () => {
     return;
   }
   S.expand = false; render(); window.scrollTo(0, 0); });
-setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$/.test(location.hash)) render(); }, 30000);
+setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$|^#\/a\/[^/]+\/tid$/.test(location.hash)) render(); }, 30000);
 
 // ---------- opdateringer ----------
 function showUpdate() {
