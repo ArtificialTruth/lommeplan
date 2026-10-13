@@ -426,8 +426,11 @@ function plState() {
     const last = [...segs].reverse().find(s => s.slot === SK && abs(s.dag, s.from) <= cur && shifts[s.id]);
     if (last) { const pr = pair(last); if (pr.to && cur < abs(pr.to.dag, pr.to.to)) { pl = pr.to; shiftedAt = shifts[last.id].t; sk = last; from = pr.from; to = pr.to; } }
   }
+  let held = false;   // der er altid en PL: man er PL, indtil den næste tager over
+  if (!pl) { const last = [...pls].reverse().find(s => abs(s.dag, s.from) <= cur); if (last) { pl = last; held = true; } }
+  const nextAny = pls.find(s => abs(s.dag, s.from) > cur);
   const nextSeg = pls.find(s => abs(s.dag, s.from) > (pl ? abs(pl.dag, pl.from) : cur) && abs(s.dag, s.from) > cur - 0 && (!pl || s.slot !== pl.slot));
-  return { pl, sk, nextSeg, from, to, shiftedAt, outgoing, cur, abs, segs };
+  return { pl, sk, nextSeg, nextAny, from, to, shiftedAt, outgoing, held, cur, abs, segs };
 }
 const slotDone = (slot, st) => S.pl.done[slot] === 1 || (S.pl.done[slot] !== -1 && st.outgoing && st.outgoing.has(slot)) || (S.pl.done[slot] !== -1 && st.segs.filter(s => s.slot === slot).length > 0 && st.segs.filter(s => s.slot === slot).every(s => st.abs(s.dag, s.to) <= st.cur));
 function plCard(link) {
@@ -436,7 +439,7 @@ function plCard(link) {
   if (st.sk && !st.shiftedAt && st.to) return `<a class="card now" href="#/patruljer/pl"><div class="t">PATRULJENS TIME · PL SKIFTER</div>
     <div style="display:flex;align-items:center;gap:10px;margin:6px 0 10px">${sw(st.from ? col[st.from.slot] : "var(--line)")}<div><div class="n">${esc(st.from ? plName(st.from.slot) : "–")}</div><div class="p">går af som PL</div></div><b style="font-size:22px;color:var(--mu);margin:0 4px">→</b>${sw(col[st.to.slot])}<div><div class="n">${esc(plName(st.to.slot))}</div><div class="p">bliver PL</div></div></div>
     <button class="btn" data-act="plshift:${st.sk.id}" style="margin:0">Skift PL nu</button><div class="p" style="margin-top:6px">Skiftes automatisk, når Patruljens time slutter.</div></a>`;
-  const who = st.pl ? `<div class="n">${esc(plName(st.pl.slot))}</div><div class="p">${st.shiftedAt ? `Skiftet kl. ${esc(st.shiftedAt)} · ` : ""}PL til ${DAYS[st.pl.dag].slice(0, 3)} ${st.pl.to}</div>` : `<div class="n">Ingen PL lige nu</div>${st.nextSeg ? `<div class="p">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}`;
+  const who = st.pl ? `<div class="n">${esc(plName(st.pl.slot))}</div><div class="p">${st.shiftedAt ? `Skiftet kl. ${esc(st.shiftedAt)} · ` : ""}${st.held ? (st.nextAny ? (st.nextAny.slot === st.pl.slot ? `PL fortsætter ${DAYS[st.nextAny.dag].slice(0, 3)} ${st.nextAny.from}` : `PL indtil ${esc(plName(st.nextAny.slot))} tager over ${DAYS[st.nextAny.dag].slice(0, 3)} ${st.nextAny.from}`) : "Sidste PL i ugen") : `PL til ${DAYS[st.pl.dag].slice(0, 3)} ${st.pl.to}`}</div>` : `<div class="n">Ingen PL lige nu</div>${st.nextSeg ? `<div class="p">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}`;
   return `<a class="card now" href="#/patruljer/pl"><div class="t">NU ER PL</div><div style="display:flex;gap:10px;align-items:center">${sw(st.pl ? col[st.pl.slot] : "var(--line)")}<div style="flex:1">${who}</div>${st.shiftedAt && st.sk ? `<button data-act="plundo:${st.sk.id}" style="color:var(--act);font-weight:700;font-size:13px;padding:6px">Fortryd</button>` : ""}</div>${st.pl && st.nextSeg ? `<div class="p" style="margin-top:6px">Næste: ${esc(plName(st.nextSeg.slot))} · ${DAYS[st.nextSeg.dag].slice(0, 3)} ${st.nextSeg.from}</div>` : ""}</a>`;
 }
 function plSvg() {
@@ -467,10 +470,10 @@ function viewPL(id) {
   let h = `<div style="margin-top:12px">${plCard(id)}</div>`;
   h += `<div class="seg"><button data-act="plv:liste" class="${S.plView === "liste" ? "on" : ""}">Liste</button><button data-act="plv:skema" class="${S.plView === "skema" ? "on" : ""}">Skema</button></div>`;
   if (S.plView === "liste") {
-    const doneN = [...Array(n).keys()].filter(i => slotDone(i, st)).length;
+    const doneN = [...Array(n).keys()].filter(i => slotDone(i, st) && !(st.pl && st.pl.slot === i)).length;
     h += `<div class="line"><h2 style="margin:0">${doneN} af ${n} har været PL</h2><span class="bar" style="width:110px;margin:0"><i style="width:${(doneN / n) * 100}%;background:var(--ac)"></i></span></div>`;
     for (let i = 0; i < n; i++) {
-      const mine = st.segs.filter(s => s.slot === i), dn = slotDone(i, st), isNow = st.pl && st.pl.slot === i, isNext = !!(st.nextSeg && st.nextSeg.slot === i && !isNow), hand = st.sk && !st.shiftedAt && st.to ? (st.from && st.from.slot === i ? "Går af" : st.to.slot === i ? "Overtager" : "") : "";
+      const mine = st.segs.filter(s => s.slot === i), isNow = st.pl && st.pl.slot === i, dn = slotDone(i, st) && !isNow, isNext = !!(st.nextSeg && st.nextSeg.slot === i && !isNow), hand = st.sk && !st.shiftedAt && st.to ? (st.from && st.from.slot === i ? "Går af" : st.to.slot === i ? "Overtager" : "") : "";
       h += `<div class="card ${dn ? "past" : ""}" style="display:flex;align-items:center;gap:10px;padding-left:18px"><i style="position:absolute;left:0;top:8px;bottom:8px;width:6px;border-radius:3px;background:${col[i]}"></i><div style="flex:1"><div class="n">${esc(plName(i))} ${hand ? `<span class="chip ${hand === "Går af" ? "edit" : ""}">${hand}</span>` : isNow ? '<span class="rec"><i></i>Nu</span>' : isNext ? '<span class="chip dim">Næste</span>' : ""}</div><div class="p">${mine.map(s => `${DAYS[s.dag].slice(0, 3)} ${s.from}–${s.to}`).join(" · ")}</div></div><button class="cb ${dn ? "on" : ""}" data-act="pldone:${i}" aria-label="Har været PL">${dn ? "✓" : ""}</button></div>`;
     }
     h += `<div class="hint">Boksen krydses også af sig selv, når turen er slut. Sort “PT” i skemaet = patruljens time, hvor PL skifter.</div>`;
