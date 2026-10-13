@@ -14,7 +14,7 @@ const ls = {
 };
 const S = {
   env: null, data: null, me: null,
-  aud: ls.get("lp_aud", "begge"), mine: ls.get("lp_mine") === "1", demo: ls.get("lp_demo") || null,
+  aud: ls.get("lp_aud", "begge"), viewAs: ls.get("lp_viewas", ""), withPartner: ls.get("lp_partner") === "1", vopen: false, vq: "", demo: ls.get("lp_demo") || null,
   over: (() => { try { return JSON.parse(ls.get("lp_over", "{}")); } catch { return {}; } })(),
   claim: (() => { try { return JSON.parse(ls.get("lp_claim", "{}")); } catch { return {}; } })(),
   pl: (() => { try { return { n: 6, names: [], ready: false, tpl: {}, done: {}, ...JSON.parse(ls.get("lp_pl", "{}")) }; } catch { return { n: 6, names: [], ready: false, tpl: {}, done: {} }; } })(),
@@ -80,22 +80,25 @@ function mineAct(id) {
   const c = S.claim[id]; if (c === 1) return true; if (c === -1) return false;
   return !!(S.me && (a.bemanding.includes(S.me) || a.ansvarligNavne.includes(S.me)));
 }
-function mineOn(id, dag) {   // dagsspecifik bemanding: Thorvald er kun "mine" de dage, han står på
-  const a = S.data.aktiviteter[id]; if (!a) return false;
-  const c = S.claim[id]; if (c === 1) return true; if (c === -1) return false;
-  if (!S.me) return false;
-  if (a.ansvarligNavne.includes(S.me)) return true;
+function mineOnFor(name, id, dag) {   // dagsspecifik bemanding: kun de dage, personen står på
+  const a = S.data.aktiviteter[id]; if (!a || !name) return false;
+  if (name === S.me) { const c = S.claim[id]; if (c === 1) return true; if (c === -1) return false; }
+  if (a.ansvarligNavne.includes(name)) return true;
   const bd = a.bemandingDage || {};
-  if (Object.keys(bd).length) return (bd[dag] || []).includes(S.me);
-  const mine = (a.roller || []).filter(r => r.navne.some(n => whoIs(n) === S.me));
+  if (Object.keys(bd).length) return (bd[dag] || []).includes(name);
+  const mine = (a.roller || []).filter(r => r.navne.some(n => whoIs(n) === name));
   if (mine.length) return mine.some(r => !r.dage || !r.dage.length || r.dage.includes(dag));
-  return !(a.roller || []).length && a.bemanding.includes(S.me);
+  return !(a.roller || []).length && a.bemanding.includes(name);
 }
+const mineOn = (id, dag) => mineOnFor(S.me, id, dag);
+function partnersOf(name) { const p = (S.data.patruljer || []).find(p => p.vejledere.some(v => whoIs(v) === name)); return p ? p.vejledere.map(whoIs).filter(n => n !== name && S.data.personer.includes(n)) : []; }
+const viewNames = () => (S.viewAs ? [S.viewAs, ...(S.withPartner ? partnersOf(S.viewAs) : [])] : []);
+const whoOn = e => (e.aktivitet ? viewNames().filter(n => mineOnFor(n, e.aktivitet, e.dag)) : []);
 const isMine = e => !!(e.aktivitet && mineOn(e.aktivitet, e.dag));
 function visible(e) {
   if (S.aud === "kursist" && e.maalgruppe !== "kursist") return false;
   if (S.aud === "team" && e.maalgruppe !== "team") return false;
-  if (S.mine && e.aktivitet && S.data.aktiviteter[e.aktivitet] && !isMine(e)) return false;
+  if (S.viewAs && e.aktivitet && S.data.aktiviteter[e.aktivitet] && !whoOn(e).length) return false;
   return true;
 }
 const dayEvents = date => allEvents().filter(e => e.dato === date && visible(e)).sort((a, b) => a.start.localeCompare(b.start) || a.maalgruppe.localeCompare(b.maalgruppe));
@@ -115,7 +118,7 @@ function mapsUrl(sted) {
 function evCard(e, o = {}) {
   const st = o.status || status(e), a = actFull(e.aktivitet), mine = isMine(e);
   const href = e.aktivitet ? `#/a/${e.aktivitet}` : `#/e/${e.id}`;
-  const tags = (st === "now" ? '<span class="rec"><i></i>NU</span>' : "") + (mine ? '<span class="chip">★ mine</span>' : "") + (e.maalgruppe === "team" && S.aud === "begge" && !o.lane ? '<span class="chip team">T</span>' : "") + (e.rettet ? '<span class="chip edit">rettet</span>' : "");
+  const tags = (st === "now" ? '<span class="rec"><i></i>NU</span>' : "") + (S.viewAs ? (whoOn(e).length ? `<span class="chip">★ ${esc(whoOn(e).map(n => (n === S.me && S.viewAs === S.me && !S.withPartner ? "mine" : n)).join(" + "))}</span>` : "") : mine ? '<span class="chip">★ mine</span>' : "") + (e.maalgruppe === "team" && S.aud === "begge" && !o.lane ? '<span class="chip team">T</span>' : "") + (e.rettet ? '<span class="chip edit">rettet</span>' : "");
   let extra = "";
   if (o.bar && st === "now") {
     const n = now(), s = at(e.dato, e.start), en = at(e.dato, e.slut);
@@ -129,7 +132,17 @@ function evCard(e, o = {}) {
     ${tags ? `<div class="tags">${tags}</div>` : ""}${S.hideMode ? `<button class="star hidebtn" data-act="hide:${e.id}" aria-label="${hid ? "Vis igen" : "Skjul"}">${hid ? "↺" : "✕"}</button>` : e.aktivitet ? `<button class="star ${mine ? "on" : ""}" data-act="claim:${e.aktivitet}" aria-label="${mine ? "Fjern fra mine" : "Det er min"}">${mine ? "★" : "☆"}</button>` : ""}</a>`;
 }
 const audSeg = () => `<div class="seg">${[["kursist", "Kursist"], ["begge", "Begge"], ["team", "Team"]].map(([k, l]) => `<button data-act="aud:${k}" class="${S.aud === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
-const minePill = () => `<div class="chips"><button class="pill ${S.mine ? "on" : ""}" data-act="mine">★ Kun mine${S.me ? ": " + esc(S.me) : ""}</button>${S.demo ? '<span class="pill">Demo-tid ' + esc(S.demo.replace("T", " ")) + "</span>" : ""}</div>`;
+const minePill = () => {
+  const pers = [...S.data.personer].sort((x, y) => x.localeCompare(y, "da")), q = S.vq.toLowerCase(), P = S.data.patruljer || [];
+  const dot = n => { const p = P.find(p => p.vejledere.some(v => whoIs(v) === n)); return p ? patrolDot(p.farve, 16) : '<i style="display:inline-block;width:16px"></i>'; };
+  const label = !S.viewAs ? "Alle teamere" : S.viewAs === S.me ? `Mig (${esc(S.me)})` : esc(S.viewAs), part = S.viewAs ? partnersOf(S.viewAs) : [];
+  let h = `<div style="display:flex;gap:8px;align-items:stretch;margin:10px 0"><button data-act="vopen" style="flex:1;text-align:left;background:var(--card);border:2px solid ${S.vopen ? "var(--act)" : "var(--line)"};border-radius:16px;padding:8px 12px"><span class="muted" style="font-size:9px;font-weight:800;letter-spacing:.06em;display:block">VISNING FOR</span><b>${label}</b> <span class="muted">${S.vopen ? "▴" : "▾"}</span></button>`;
+  if (part.length) h += `<button data-act="vpartner" class="pill ${S.withPartner ? "on" : ""}" style="background:${S.withPartner ? "var(--mine)" : "var(--card)"};color:${S.withPartner ? "#000" : "var(--mu)"};font-weight:800">${S.withPartner ? "★ + " : "+ "}${esc(part.join(" & "))} (makker)${S.withPartner ? " ✓" : ""}</button>`;
+  h += `</div>`;
+  if (S.vopen) h += `<div class="box" style="padding:8px;margin:-4px 0 10px"><input id="vq" placeholder="🔎 Søg teamer …" value="${esc(S.vq)}" style="margin-bottom:6px">` + [["", "Alle teamere"], ...(S.me ? [[S.me, `Mig (${S.me})`]] : []), ...pers.filter(n => n !== S.me && (!q || n.toLowerCase().includes(q))).map(n => [n, n])].filter(([v, l]) => !q || v === "" || l.toLowerCase().includes(q) || v.toLowerCase().includes(q)).map(([v, l]) => `<button data-act="vset:${esc(v)}" style="display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:9px 8px;border-radius:8px;${(S.viewAs || "") === v ? "background:#d9f7e6;color:#000;font-weight:800" : ""}">${v ? dot(v === S.me ? S.me : v) : '<i style="width:16px"></i>'}<span style="flex:1">${esc(l)}</span>${(S.viewAs || "") === v ? "✓" : ""}</button>`).join("") + `</div>`;
+  if (S.demo) h += `<div class="chips"><span class="pill">Demo-tid ${esc(S.demo.replace("T", " "))}</span></div>`;
+  return h;
+};
 const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["patruljer", "⚑", "Patruljer"], ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
@@ -845,7 +858,9 @@ document.addEventListener("click", ev => {
   if (el.closest("a")) ev.preventDefault();
   if (act === "claim") { const id = p.join(":"), doc = !!(S.me && S.data.aktiviteter[id] && (S.data.aktiviteter[id].bemanding.includes(S.me) || S.data.aktiviteter[id].ansvarligNavne.includes(S.me))); const now1 = mineAct(id); if (now1) { doc ? (S.claim[id] = -1) : delete S.claim[id]; } else { doc ? delete S.claim[id] : (S.claim[id] = 1); } saveClaim(); }
   else if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
-  else if (act === "mine") { S.mine = !S.mine; ls.set("lp_mine", S.mine ? "1" : "0"); }
+  else if (act === "vopen") { S.vopen = !S.vopen; S.vq = ""; }
+  else if (act === "vset") { S.viewAs = p.join(":"); ls.set("lp_viewas", S.viewAs); S.vopen = false; S.vq = ""; if (!partnersOf(S.viewAs).length) S.withPartner = false; }
+  else if (act === "vpartner") { S.withPartner = !S.withPartner; ls.set("lp_partner", S.withPartner ? "1" : "0"); }
   else if (act === "expand") S.expand = !S.expand;
   else if (act === "theme") { ls.set("lp_theme", p[0]); applyTheme(); }
   else if (act === "news") { const id = p.join(":"); let d = []; try { d = JSON.parse(ls.get("lp_news", "[]")); } catch {} if (!d.includes(id)) d.push(id); ls.set("lp_news", JSON.stringify(d)); }
@@ -906,6 +921,7 @@ document.addEventListener("click", ev => {
 });
 document.addEventListener("input", ev => {
   if (ev.target.id === "sq") { S.sq = ev.target.value; const el = document.getElementById("sres"); if (el) el.innerHTML = soegResultater(S.sq); return; }
+  if (ev.target.id === "vq") { S.vq = ev.target.value; const pos = ev.target.selectionStart; render(); const el = document.getElementById("vq"); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; }
   if (ev.target.id === "tq") { S.teamQ = ev.target.value; const pos = ev.target.selectionStart; render(); const el = document.getElementById("tq"); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; } const el = ev.target; if (el.dataset && el.dataset.plname !== undefined) { S.pl.names[+el.dataset.plname] = el.value; savePl(); } });
 document.addEventListener("change", ev => {
   const el = ev.target; if (!el.dataset || !el.dataset.act) return;
