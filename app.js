@@ -238,6 +238,11 @@ function tidslinje(a, evs) {
   });
   return h + `</div>`;
 }
+function songBox(id) {
+  const l = (S.data.sange || {})[id];
+  if (!l || !l.length) return "";
+  return l.map(x => `<div class="box song"><div class="line" style="padding:0"><b>🎵 ${esc(x.titel)}</b><a href="https://suno.com/song/${esc(x.id)}" target="_blank" rel="noopener" class="muted">Åbn i Suno ›</a></div><iframe src="https://suno.com/embed/${esc(x.id)}" loading="lazy" title="${esc(x.titel)}" allow="autoplay; clipboard-write; encrypted-media" referrerpolicy="origin" style="width:100%;height:160px;border:0;border-radius:12px;margin-top:8px;background:var(--card2)"></iframe></div>`).join("");
+}
 function viewAct(id, tab) {
   const a = actFull(id);
   if (!a) return `<a href="#/uge">‹ Tilbage</a><p>Aktiviteten findes ikke.</p>`;
@@ -255,6 +260,7 @@ function viewAct(id, tab) {
   if (a.note) h += `<div class="box" style="border:1.5px solid var(--mine)"><h2 style="margin:0 0 6px">Min note</h2>${paras(a.note)}</div>`;
   if (PL_IDS.includes(id) && tab === "resume") h += `<h2>PL-skifteplan</h2>${plCard(id)}`;
   if (tab === "pl" && hasPl) { return h.replace(/<button class="btn[^"]*" data-act="claim:[^>]*>[^<]*<\/button>/, "") + viewPL(id); }
+  if (tab === "resume" || tab === "fantasi") h += songBox(id);
   if (tab === "resume") {
     h += `<h2>Formål</h2><div class="prose">${paras(a.formaal) || '<p class="muted">Ikke beskrevet.</p>'}</div>`;
     if (a.koncept) h += `<h2>Koncept</h2><div class="prose ${S.expand ? "" : "clamp"}">${paras(a.koncept)}</div><button class="fold" data-act="expand">${S.expand ? "Vis mindre" : "Læs hele konceptet ▾"}</button>`;
