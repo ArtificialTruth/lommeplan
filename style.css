@@ -134,4 +134,4 @@ mark{background:#ffe9a8;color:#14161a;border-radius:3px;padding:0 1px}:root[data
 .wcard{background:rgba(255,255,255,.16);border-radius:20px;padding:18px;margin-top:16px;display:flex;flex-direction:column;gap:4px}.wcard small{opacity:.8}
 .wbarl{display:flex;justify-content:space-between;margin-top:12px;font-weight:700;font-size:13px}.wbar{height:10px;background:rgba(255,255,255,.25);border-radius:5px;margin-top:4px}.wbar i{display:block;height:100%;background:#fff;border-radius:5px}
 .wnav{position:absolute;inset:90px 0 90px 0;display:flex;z-index:1}.wnav button{flex:1}.wnav button:first-child{flex:.4}.wnav button:last-child{flex:.6}
-.wplayer{position:relative;z-index:2}.pbar{display:flex;gap:10px;align-items:center;width:100%;background:rgba(0,0,0,.35);color:#fff;border-radius:18px;padding:16px;font-weight:800}
+.wplayer{position:relative;z-index:2;margin-top:8px}.pbar{display:flex;gap:10px;align-items:center;width:100%;background:rgba(0,0,0,.35);color:#fff;border-radius:18px;padding:16px;font-weight:800}

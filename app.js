@@ -238,6 +238,8 @@ function tidslinje(a, evs) {
   });
   return h + `</div>`;
 }
+const songsOf = id => (S.data.sange || {})[id] || [];
+const songEmbed = (x, h = 152, dark = false) => `<iframe src="https://suno.com/embed/${esc(x.id)}" loading="lazy" title="${esc(x.titel)}" allow="autoplay; clipboard-write; encrypted-media" referrerpolicy="origin" style="width:100%;height:${h}px;border:0;border-radius:12px;margin-top:6px;background:${dark ? "rgba(0,0,0,.3)" : "var(--card2)"}"></iframe>`;
 function songBox(id) {
   const l = (S.data.sange || {})[id];
   if (!l || !l.length) return "";
@@ -786,24 +788,6 @@ async function sendEval(akt) {
 async function flushEvals() { for (const akt of Object.keys(S.evals)) if (!S.evSent[akt] && S.data && S.data.evalUrl) await sendEval(akt); }
 async function loadAgg() { try { const r = await evCall("/aggregat"); if (r.ok) { S.agg = await r.json(); if (/^#\/eval\/wrapped/.test(location.hash)) render(); } } catch {} }
 
-// musik: spor pr. aktivitet; vises kun, hvis filen findes
-async function probeLyd() {
-  if (S.lydOk) return; S.lydOk = {};
-  for (const t of S.data.lyd || []) { try { const r = await fetch(t.fil, { method: "HEAD", cache: "no-store" }); S.lydOk[t.fil] = r.ok && /audio|mpeg|octet/i.test(r.headers.get("content-type") || "audio"); } catch { S.lydOk[t.fil] = false; } }
-  render();
-}
-function trackFor(aktId) {
-  const ts = (S.data.lyd || []).filter(t => S.lydOk && S.lydOk[t.fil]); if (!ts.length) return null;
-  const ik = (S.data.memer || {})[aktId] && S.data.memer[aktId].ikon;
-  return ts.find(t => (t.akt || []).includes(aktId)) || ts.find(t => ik && (t.stemning || []).includes(ik)) || ts[0];
-}
-function playTrack(t) {
-  if (!S.audio) { S.audio = new Audio(); S.audio.loop = true; S.audio.addEventListener("pause", () => render()); S.audio.addEventListener("play", () => render()); }
-  if (S.audio.dataset.fil !== t.fil) { S.audio.src = t.fil; S.audio.dataset.fil = t.fil; }
-  S.audio.paused ? S.audio.play().catch(() => {}) : S.audio.pause();
-}
-const playerBar = (t, dark) => t ? `<button data-act="audio:${esc(t.fil)}" class="${dark ? "pbar" : "pill"}" style="${dark ? "" : "display:inline-flex;gap:8px;align-items:center"}">${S.audio && !S.audio.paused && S.audio.dataset.fil === t.fil ? "❚❚" : "▶"} <span>♪ ${esc(t.titel)}</span></button>` : "";
-
 function viewEval(sub) {
   if (!S.me) return `<div class="top"><div><h1>Evaluering</h1></div>${ALIEN}</div><div class="box muted">Vælg dit navn under Mig, så ved appen, hvilke aktiviteter du har stået på.</div>`;
   if (sub === "q" && S.ev) return viewEvQ();
@@ -828,10 +812,14 @@ function viewEvQ() {
     4: `<div class="muted" style="font-weight:800;font-size:11px">DET DU SAVNEDE</div><h1 style="font-size:24px;margin:6px 0 6px">Gav aktivitetsbeskrivelsen nok indsigt?</h1><div style="display:flex;justify-content:center;gap:4px;margin:8px 0">${[1, 2, 3, 4, 5].map(i => `<button data-act="evstars:${i}" style="font-size:42px;color:${i <= (d.indsigt || 0) ? "#f2c91b" : "var(--line)"}" aria-label="${i} stjerner">★</button>`).join("")}</div><h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Var der noget, du savnede?</h2>${chips("savnet", EV.savnet)}<h2 style="margin-top:10px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvordan kan vi opfylde det behov? (kort)</h2>${ta("behov", "Fx: Skriv, hvor posterne står, i beskrivelsen …")}`,
     5: `<div style="text-align:center;padding-top:30px"><div style="font-size:64px">🎉</div><h1 style="font-size:26px">Tak!</h1><p class="muted">Dine svar om ${esc(a.titel.split(" (")[0])} gemmes${S.data.evalUrl ? " og sendes anonymt til arrangørerne" : " på din telefon"}.</p>${S.data.evalUrl ? '<p class="muted" style="font-size:12px">Uden navn. Skriv ikke andres navne i fritekst, hvis de ikke skal stå der.</p>' : ""}</div>`,
   };
-  const trk = trackFor(akt);
   return `<div style="display:flex;justify-content:space-between;align-items:center"><button data-act="evexit" style="font-size:20px;color:var(--mu)">✕</button><b>${esc(a.titel.split(" (")[0])}</b><span class="muted" style="font-weight:700">${step}/${N}</span></div>
-    <div class="bar" style="margin:10px 0 20px"><i style="width:${(step / N) * 100}%;background:var(--ac)"></i></div>${trk ? `<div style="text-align:right;margin:-6px 0 8px">${playerBar(trk)}</div>` : ""}${Q[step]}
+    <div class="bar" style="margin:10px 0 20px"><i style="width:${(step / N) * 100}%;background:var(--ac)"></i></div>${songsOf(akt).length ? `<details class="box" style="padding:8px 12px;margin:0 0 12px"><summary style="font-weight:700">🎵 Lyt til ${esc(songsOf(akt).map(x => "“" + x.titel + "”").join(" og "))} mens du svarer</summary>${songsOf(akt).map(x => songEmbed(x)).join("")}</details>` : ""}${Q[step]}
     <div style="position:sticky;bottom:calc(88px + env(safe-area-inset-bottom));padding-top:14px;background:linear-gradient(transparent,var(--bg) 30%)"><button class="btn" data-act="${step === N ? "evdone" : "evnext"}" style="margin:0 0 6px">${step === N ? "Færdig" : "Næste"}</button><div style="display:flex;justify-content:space-between"><button data-act="evback" class="muted" ${step === 1 ? "disabled" : ""} style="padding:8px">‹ Tilbage</button>${step < N ? '<button data-act="evnext" class="muted" style="padding:8px">Spring over</button>' : ""}</div></div>`;
+}
+function wrapTopActivity() {
+  const rows = evalActs(), tot = {};
+  for (const e of allEvents()) if (e.aktivitet && rows.some(r => r.a.id === e.aktivitet) && mineOn(e.aktivitet, e.dag)) tot[e.aktivitet] = (tot[e.aktivitet] || 0) + (mm(e.slut) - mm(e.start));
+  return Object.entries(tot).sort((a, b) => b[1] - a[1]).map(x => x[0]).find(id => songsOf(id).length) || "";
 }
 function wrapStats() {
   const rows = evalActs(), mine = new Set(rows.map(r => r.a.id)), evsMine = allEvents().filter(e => e.aktivitet && mine.has(e.aktivitet) && mineOn(e.aktivitet, e.dag));
@@ -840,17 +828,17 @@ function wrapStats() {
   const cnt = [4, 3, 2, 1].map(v => ratings.filter(([, x]) => x.mave === v).length), avg = ratings.length ? ratings.reduce((s, [, x]) => s + x.mave, 0) / ratings.length : 0;
   const fav = [...ratings].sort((a, b) => b[1].mave - a[1].mave || (b[1].t || "").localeCompare(a[1].t || ""))[0], longest = [...rows].sort((a, b) => b.a.tidsplan.length - a.a.tidsplan.length)[0];
   const vibe = avg >= 3.5 ? ["Alien-fest-pop", "med stjerner i øjnene"] : avg >= 2.8 ? ["Alien-folk", "rundt om bålet"] : avg >= 2 ? ["Synth", "under en tung himmel"] : ["Rolig ambient", "efter regn"];
-  return { n: rows.length, timer: Math.round(mins / 60), dage, others: others.size, cnt, vibe, fav: fav && { a: S.data.aktiviteter[fav[0]], d: fav[1] }, avg };
+  return { n: rows.length, timer: Math.round(mins / 60), dage, others: others.size, cnt, vibe, fav: fav && { a: S.data.aktiviteter[fav[0]], d: fav[1] }, favSong: ([...ratings].filter(([id]) => songsOf(id).length).sort((a, b) => b[1].mave - a[1].mave || (b[1].t || "").localeCompare(a[1].t || ""))[0] || [""])[0], avg };
 }
 function viewWrapped(i) {
   const s = wrapStats(), G = [["#3b0764", "#be185d"], ["#064e3b", "#0ea5e9"], ["#1e3a8a", "#7c3aed"], ["#7c2d12", "#db2777"]][i] || ["#3b0764", "#be185d"], N = 4;
-  const trk = trackFor(s.fav ? s.fav.a.id : "") || trackFor(""), top = `<div class="wtop">${[...Array(N)].map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div><div class="wlab"><span>🎧 DIN UGE · PLanstar 2026</span><a href="#/eval" style="color:#fff;text-decoration:none;font-size:18px">✕</a></div>`;
+  const topAct = wrapTopActivity(), pick = [topAct, s.favSong, "20", "7"][i], sng = (songsOf(pick)[songsOf(pick).length - 1] || null), top = `<div class="wtop">${[...Array(N)].map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div><div class="wlab"><span>🎧 DIN UGE · PLanstar 2026</span><a href="#/eval" style="color:#fff;text-decoration:none;font-size:18px">✕</a></div>`;
   let body = "";
   if (i === 0) body = `<div class="w1">Du stod på</div><div class="wbig">${s.n}</div><div class="w2">aktiviteter</div><div class="wst"><div><b>${s.timer} t</b>på post</div><div><b>${s.dage}</b>dage i felten</div><div><b>${s.others}</b>andre teamere ved din side</div></div><p class="wnote">Det er kun for dig. Ingen rangliste.</p>`;
   if (i === 1) body = `<div class="w1">Din uge lød som</div><div class="wbig2">${esc(s.vibe[0])}</div><div class="w2" style="font-size:26px">${esc(s.vibe[1])}</div><div class="wface">${EV.mave.slice().reverse().map(([v, ic], k) => `<div><span>${ic}</span><i style="height:${12 + Math.round(70 * s.cnt[k] / Math.max(1, ...s.cnt))}px"></i><b>${s.cnt[k]}</b></div>`).join("")}</div>${s.fav ? `<p class="w1" style="margin-top:22px">Din favorit: ${esc(s.fav.a.titel.split(" (")[0])} ${(S.data.memer || {})[s.fav.a.id] ? "" : ""}</p>${s.fav.d.godtTekst ? `<p class="wnote" style="font-style:italic">“${esc(s.fav.d.godtTekst.slice(0, 110))}”</p>` : ""}` : ""}`;
   if (i === 2) { const g = S.agg; body = `<div class="w1" style="font-size:26px;font-weight:800">Holdets billede</div><div class="wnote">Alle teamere samlet, ingen navne</div>` + (g && g.svar ? `<div class="wcard"><b style="font-size:44px">${g.mave ?? "–"}</b><span>i snit på mavefornemmelsen (1–4)</span><small>${g.teamere} teamere har svaret</small></div><div class="w1" style="margin-top:22px;font-weight:800">Mest nævnt til “10 % bedre”</div>${(g.bedre || []).slice(0, 3).map(b => `<div class="wbarl"><span>${esc(b.l)}</span><b>${b.pct}%</b></div><div class="wbar"><i style="width:${Math.min(100, b.pct * 2)}%"></i></div>`).join("") || '<p class="wnote">For få svar endnu.</p>'}` : `<div class="wcard"><span>Holdets billede dukker op, når nok teamere har svaret.</span></div>`); }
   if (i === 3) body = `<div class="w1" style="font-size:30px;font-weight:900;margin-top:40px">Tak for en alien-uge 👽</div><p class="wnote" style="font-size:15px;margin-top:14px">Dine svar bliver til PLan næste år.</p><a class="btn" href="#/eval" style="background:#fff;color:#000;margin-top:30px;text-decoration:none">Tilbage til Evaluering</a>`;
-  return `<div class="wrap" style="background:linear-gradient(160deg,${G[0]},${G[1]})">${top}<div class="wbody">${body}</div><div class="wnav"><button data-act="wr:-1" aria-label="Forrige"></button><button data-act="wr:1" aria-label="Næste"></button></div>${trk ? `<div class="wplayer">${playerBar(trk, true)}</div>` : ""}</div>`;
+  return `<div class="wrap" style="background:linear-gradient(160deg,${G[0]},${G[1]})">${top}<div class="wbody">${body}</div><div class="wnav"><button data-act="wr:-1" aria-label="Forrige"></button><button data-act="wr:1" aria-label="Næste"></button></div>${sng ? `<div class="wplayer"><div class="wlab" style="margin:0 0 -2px;font-size:11px">🎵 ${esc(sng.titel)} · ${esc((S.data.aktiviteter[pick] || {}).titel || "").split(" (")[0]}</div>${songEmbed(sng, 152, true)}</div>` : ""}</div>`;
 }
 
 function viewLogin() {
@@ -973,8 +961,8 @@ function render() {
   else if (r === "mine") h = viewMine();
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
   else if (r === "eval" && S.evalOn) {
-    if (a === "wrapped") { $app.innerHTML = viewWrapped(+b || 0); if (!S.agg) loadAgg(); probeLyd(); return; }
-    h = viewEval(a); tab = "eval"; probeLyd();
+    if (a === "wrapped") { $app.innerHTML = viewWrapped(+b || 0); if (!S.agg) loadAgg(); return; }
+    h = viewEval(a); tab = "eval";
   }
   else if (r === "soeg") { h = viewSoeg(); tab = "uge"; }
   else if (r === "patruljer") { h = viewPatruljer(a, b); tab = "patruljer"; }
@@ -1022,7 +1010,6 @@ document.addEventListener("click", ev => {
   else if (act === "evchip") { const f = p[0], l = p.slice(1).join(":"), arr = S.ev.d[f] = S.ev.d[f] || []; const i = arr.indexOf(l); i >= 0 ? arr.splice(i, 1) : arr.push(l); }
   else if (act === "evdone") { S.ev.d.t = new Date().toISOString().slice(0, 16); S.evals[S.ev.akt] = S.ev.d; S.evSent[S.ev.akt] = 0; saveEvals(); const k = S.ev.akt; S.ev = null; sendEval(k).then(() => render()); location.hash = "#/eval"; return; }
   else if (act === "wr") { const m = location.hash.match(/wrapped\/(\d)/), i = Math.max(0, Math.min(3, (m ? +m[1] : 0) + +p[0])); location.hash = "#/eval/wrapped/" + i; return; }
-  else if (act === "audio") { const t = (S.data.lyd || []).find(x => x.fil === p.join(":")); if (t) playTrack(t); return; }
   else if (act === "vopen") { S.vopen = !S.vopen; S.vq = ""; }
   else if (act === "vset") { S.viewAs = p.join(":"); ls.set("lp_viewas", S.viewAs); S.vopen = false; S.vq = ""; if (!partnersOf(S.viewAs).length) S.withPartner = false; }
   else if (act === "vpartner") { S.withPartner = !S.withPartner; ls.set("lp_partner", S.withPartner ? "1" : "0"); }
