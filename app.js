@@ -963,7 +963,7 @@ window.addEventListener("resize", updateNowLine);
 function render() {
   if (S.data && S.onb) { $app.innerHTML = viewOnb(); return; }
   if (!S.data) { $app.innerHTML = S.loading ? '<p class="muted" style="padding-top:30vh;text-align:center">Henter plan …</p>' : viewLogin(); bindLogin(); return; }
-  const [r = "uge", a, b] = location.hash.replace(/^#\/?/, "").split("/");
+  let [r = "uge", a, b] = location.hash.replace(/^#\/?/, "").split("/");
   let h, tab = r;
   if (r === "a") { h = viewAct(a, b); tab = "uge"; }
   else if (r === "e") { h = viewEvent(a); tab = "uge"; }
@@ -972,6 +972,7 @@ function render() {
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
   else if (r === "eval" && S.evalOn) {
     if (a === "wrapped") { $app.innerHTML = viewWrapped(+b || 0); if (!S.agg) loadAgg(); return; }
+    if (a === "q" && !S.ev) { history.replaceState(null, "", "#/eval"); a = ""; }   // genåbnet app på et spørgsmål uden udkast: tilbage til checklisten
     h = viewEval(a); tab = "eval";
   }
   else if (r === "soeg") { h = viewSoeg(); tab = "uge"; }
@@ -1012,7 +1013,7 @@ document.addEventListener("click", ev => {
   else if (act === "evaltoggle") { S.evalOn = !S.evalOn; ls.set("lp_eval_on", S.evalOn ? "1" : "0"); }
   else if (act === "evalall") { S.evalAll = !S.evalAll; ls.set("lp_eval_all", S.evalAll ? "1" : "0"); }
   else if (act === "evsong") { const s = songsOf(S.ev.akt)[+p[0]], f = document.querySelector(".box iframe"); if (s && f) f.src = "https://suno.com/embed/" + s.id; return; }
-  else if (act === "evstart") { S.ev = { akt: p.join(":"), step: 1, d: JSON.parse(JSON.stringify(S.evals[p.join(":")] || {})) }; location.hash = "#/eval/q"; return; }
+  else if (act === "evstart") { S.ev = { akt: p.join(":"), step: 1, d: JSON.parse(JSON.stringify(S.evals[p.join(":")] || {})) }; if (location.hash === "#/eval/q") render(); else location.hash = "#/eval/q"; window.scrollTo(0, 0); return; }
   else if (act === "evexit") { S.ev = null; location.hash = "#/eval"; return; }
   else if (act === "evnext") { if (S.ev) S.ev.step = Math.min(5, S.ev.step + 1); window.scrollTo(0, 0); if (evPartial()) return; }
   else if (act === "evback") { if (S.ev) S.ev.step = Math.max(1, S.ev.step - 1); window.scrollTo(0, 0); if (evPartial()) return; }
