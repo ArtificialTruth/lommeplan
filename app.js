@@ -747,6 +747,27 @@ function memeSvg(m) {
   return `<svg viewBox="0 0 360 300" role="img" aria-label="Meme: ${esc(m.top.replace(/\n/g, " "))} ${esc(m.bottom.replace(/\n/g, " "))}" style="width:100%;border-radius:14px;display:block"><defs><linearGradient id="mg${esc(m.ikon)}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="360" height="300" fill="url(#mg${esc(m.ikon)})"/>${memeIcon(m.ikon)}${T(top, 34, true)}${T(bot, 282, false)}</svg>`;
 }
 
+// ---------- Brugsstatistik (kun tællere, ingen indhold; sendes kun, hvis du vælger det i app-evalueringen) ----------
+const FEATURES = [
+  ["view:uge", "Ugeplan"], ["act:day", "Ugeoverblik (tryk på en dag)"], ["view:soeg", "Søg i planen"], ["view:a:resume", "Aktivitet: Resumé"], ["view:a:tid", "Aktivitet: Tidsplan"],
+  ["view:a:fantasi", "Aktivitet: Fantasi"], ["view:a:bem", "Aktivitet: Bemanding"], ["view:husk", "Huskeliste"], ["act:tadd", "Egne huskepunkter"], ["view:patruljer:liste", "Patruljer og vejledere"],
+  ["view:patruljer:pl", "PL-plan"], ["act:plshift", "PL-skifte"], ["view:patruljer:lejr", "Lejrkort og PT-steder"], ["view:patruljer:team", "Team og kontakter"], ["link:tel", "Ring eller SMS til en teamer"],
+  ["act:claim", "“Det er min”-stjernen"], ["act:vset", "Visning for en anden teamer"], ["act:vpartner", "Makker-knappen"], ["act:ics", "Kalender-download"], ["act:exp", "Sikkerhedskopi"],
+  ["act:theme", "Lys/mørkt udseende"], ["view:eval", "Evaluering"], ["view:eval:wrapped", "Wrapped"], ["link:maps", "Google Maps-links"], ["link:doc", "Åbn original-doc"], ["act:plcopy", "Del PL-plan som tekst"],
+];
+const featLabel = k => (FEATURES.find(f => f[0] === k) || [k, k])[1];
+function track(k) { try { const u = JSON.parse(ls.get("lp_usage", "{}")); u[k] = (u[k] || 0) + 1; ls.set("lp_usage", JSON.stringify(u)); } catch {} }
+function trackDay() { try { const d = new Date().toISOString().slice(0, 10), l = JSON.parse(ls.get("lp_usage_days", "[]")); if (!l.includes(d)) { l.push(d); ls.set("lp_usage_days", JSON.stringify(l)); } } catch {} }
+function trackRoute() {
+  const [r, a, b] = location.hash.replace(/^#\/?/, "").split("/"); if (!r || r.startsWith("u=")) return;
+  if (r === "a") track("view:a:" + (b || "resume")); else if (r === "eval") track("view:eval" + (a === "wrapped" ? ":wrapped" : "")); else if (r === "patruljer") track("view:patruljer:" + (a || "liste")); else track("view:" + r);
+}
+document.addEventListener("click", ev => {   // links ud af appen
+  const a = ev.target.closest && ev.target.closest("a[href]"); if (!a) return; const h = a.getAttribute("href") || "";
+  if (/^(tel|sms):/.test(h)) track("link:tel"); else if (/google\.com\/maps/.test(h)) track("link:maps"); else if (/docs\.google|drive\.google/.test(h)) track("link:doc");
+}, true);
+const usageSummary = () => { let u = {}; try { u = JSON.parse(ls.get("lp_usage", "{}")); } catch {} return { brug: u, dage: (() => { try { return JSON.parse(ls.get("lp_usage_days", "[]")).length; } catch { return 0; } })() }; };
+
 // ---------- Evaluering + Wrapped (testfane: slås til under Mig) ----------
 Object.assign(S, {
   evalOn: ls.get("lp_eval_on") === "1", evalAll: ls.get("lp_eval_all") === "1", ev: null, wr: 0, agg: null, lydOk: null,
@@ -798,6 +819,7 @@ function viewEval(sub) {
     <div style="flex:1"><b>Du har evalueret ${done} af ${rows.length}</b><div class="muted">Hver tager ca. 1 minut</div>${nxt ? `<button class="btn" data-act="evstart:${nxt.a.id}" style="margin:8px 0 0;padding:8px">Evaluér næste: ${esc(nxt.a.titel.split(" (")[0])} ▶</button>` : ""}</div></div>`;
   if (!rows.length) h += `<div class="box muted">Du står ikke på nogen aktiviteter endnu.</div>`;
   for (const r of rows) h += `<div class="card" style="display:flex;align-items:center;gap:12px;padding-left:14px"><span class="cb ${r.done ? "on" : ""}" style="pointer-events:none">${r.done ? "✓" : ""}</span><div style="flex:1"><div class="n">${esc(r.a.titel.split(" (")[0])}</div><div class="p">${DAYS[dayIdx(r.first.dato)].slice(0, 3)} ${r.first.start}${r.ok ? "" : " · ikke afholdt endnu"}</div></div>${r.done ? `<button class="pill" data-act="evstart:${r.a.id}" style="color:var(--act)">Redigér</button>` : r.ok ? `<button class="pill on" data-act="evstart:${r.a.id}" style="background:var(--ac);color:#000;font-weight:800;border-color:var(--ac)">Start</button>` : ""}${r.done && S.data.evalUrl ? `<span class="muted" title="${S.evSent[r.a.id] ? "Sendt" : "Gemt på telefonen"}" style="font-size:14px">${S.evSent[r.a.id] ? "☁✓" : "☁…"}</span>` : ""}</div>`;
+  h += `<a class="card" href="#/eval/app" style="display:flex;align-items:center;gap:12px;padding-left:14px;text-decoration:none"><span class="cb ${S.appEval ? "on" : ""}" style="pointer-events:none">${S.appEval ? "✓" : ""}</span><div style="flex:1"><div class="n">📱 Evaluér selve appen</div><div class="p">Hvad brugte du mest og mindst?</div></div><span class="pill ${S.appEval ? "" : "on"}" style="${S.appEval ? "color:var(--act)" : "background:var(--ac);color:#000;font-weight:800;border-color:var(--ac)"}">${S.appEval ? "Redigér" : "Start"}</span></a>`;
   h += all ? `<a class="btn" href="#/eval/wrapped/0" style="margin-top:14px;text-decoration:none">🎧 Åbn din uge som Wrapped</a>` : `<div class="box" style="background:#ede9fe;color:#14161a;display:flex;justify-content:space-between;align-items:center"><div><b>🎧 Din uge, som Wrapped</b><div class="muted" style="color:#4c4c5c">Åbner, når du har evalueret alle</div></div><span style="font-size:18px">🔒</span></div>`;
   if (!S.data.evalUrl) h += `<div class="hint">Serveren er ikke sat op endnu. Svar gemmes kun på din telefon.</div>`;
   return h;
@@ -825,6 +847,26 @@ function viewEvQ() {
   return `<div style="display:flex;justify-content:space-between;align-items:center"><button data-act="evexit" style="font-size:20px;color:var(--mu)">✕</button><b>${esc(a.titel.split(" (")[0])}</b><span id="evstep" class="muted" style="font-weight:700">${step}/${EV_N}</span></div>
     <div class="bar" style="margin:10px 0 14px"><i id="evprog" style="width:${(step / EV_N) * 100}%;background:var(--ac)"></i></div>${songs.length ? `<div class="box" style="padding:8px 12px;margin:0 0 14px"><div class="muted" style="font-size:12px;font-weight:700">🎵 ${esc(songs.map(x => "“" + x.titel + "”").join(" · "))} – spiller, mens du svarer</div>${songEmbed(songs[0])}${songs.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${songs.map((x, i) => `<button class="pill" data-act="evsong:${i}" style="font-size:11px">${esc(x.titel)}</button>`).join("")}</div>` : ""}</div>` : ""}<div id="evbody">${evBody()}</div>
     <div id="evfoot" style="position:sticky;bottom:calc(88px + env(safe-area-inset-bottom));padding-top:14px;background:linear-gradient(transparent,var(--bg) 30%)">${evFoot()}</div>`;
+}
+// ---------- Evaluering af selve appen ----------
+Object.assign(S, { ap: null, aggApp: null, appEval: (() => { try { return JSON.parse(ls.get("lp_appeval", "null")); } catch { return null; } })() });
+async function sendAppEval() {
+  if (!S.data.evalUrl || !S.appEval) return false;
+  try { const r = await evCall("/send-app", { method: "POST", body: JSON.stringify({ dev: devId(), svar: S.appEval }) }); if (r.ok) { S.appEval.sendt = 1; ls.set("lp_appeval", JSON.stringify(S.appEval)); return true; } } catch {}
+  return false;
+}
+async function loadAggApp() { try { const r = await evCall("/app-aggregat"); if (r.ok) { S.aggApp = await r.json(); if (/^#\/eval\/wrapped/.test(location.hash)) render(); } } catch {} }
+function topUsed(u, n = 5) { return Object.entries(u || {}).filter(([k, v]) => !k.startsWith("_") && v > 0 && FEATURES.some(f => f[0] === k)).sort((a, b) => b[1] - a[1]).slice(0, n); }
+function viewAppEval() {
+  const d = S.ap, u = usageSummary(), top = topUsed(u.brug, 3), chips = (f) => `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">${FEATURES.map(([k, l]) => `<button class="pill ${(d[f] || []).includes(k) ? "on" : ""}" data-act="apchip:${f}:${esc(k)}" style="${(d[f] || []).includes(k) ? "background:#d9f7e6;color:#000;border-color:var(--act)" : "color:var(--tx)"};padding:6px 11px;font-size:12px">${esc(l)}</button>`).join("")}</div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center"><button data-act="apexit" style="font-size:20px;color:var(--mu)">✕</button><b>Evaluér appen</b><span></span></div>
+    <h1 style="font-size:24px;margin:14px 0 6px">Hvor god har Lommeplan været?</h1><div style="display:flex;justify-content:center;gap:4px">${[1, 2, 3, 4, 5].map(i => `<button data-act="apstars:${i}" style="font-size:42px;color:${i <= (d.stjerner || 0) ? "#f2c91b" : "var(--line)"}" aria-label="${i} stjerner">★</button>`).join("")}</div>
+    <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad brugte du mest?</h2>${chips("mest")}
+    <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad brugte du næsten aldrig?</h2>${chips("mindst")}
+    <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad savnede du i appen?</h2><textarea id="ap_mangler" placeholder="Fx: Et kort over Gribskov …" style="min-height:70px">${esc(d.mangler || "")}</textarea>
+    <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad irriterede dig?</h2><textarea id="ap_irriterer" placeholder="Fx: Teksten var for lille …" style="min-height:70px">${esc(d.irriterer || "")}</textarea>
+    <div class="box" style="margin-top:14px"><div class="line" style="padding:0"><div style="flex:1"><b>Send min anonyme brug med</b><div class="muted" style="font-size:12px">Kun hvor mange gange du har brugt hver funktion. Intet indhold, ingen navne.${top.length ? " Dine mest brugte: " + top.map(([k, v]) => esc(featLabel(k)) + " (" + v + ")").join(", ") + "." : ""}</div></div><button class="toggle ${d.samtykke !== false ? "on" : ""}" data-act="apconsent" aria-label="Send brug"></button></div></div>
+    <button class="btn" data-act="apsend" style="margin-top:14px">Gem og send</button>${S.data.evalUrl ? "" : '<div class="hint">Serveren er ikke sat op endnu. Svar gemmes kun på din telefon.</div>'}`;
 }
 function wrapTopActivity() {
   const rows = evalActs(), tot = {};
@@ -875,9 +917,9 @@ function wrapSlides() {
   const s = wrapStats(), days = wrapDays(s), topAct = wrapTopActivity(), sl = [];
   sl.push({ k: "tal", song: topAct });
   days.forEach(dd => sl.push({ k: "dag", dd, song: dd.songAct }));
-  sl.push({ k: "fun", song: "9" });
+  sl.push({ k: "fun", song: "9" }, { k: "brug" });
   if (days.filter(x => x.mood).length >= 2) sl.push({ k: "udvikling", days: days.filter(x => x.mood) });
-  sl.push({ k: "vibe", song: s.favSong }, { k: "holdet", song: "20" }, { k: "tak", song: "7" });
+  sl.push({ k: "vibe", song: s.favSong }, { k: "holdet", song: "20" }, { k: "appen" }, { k: "tak", song: "7" });
   return { s, sl };
 }
 function viewWrapped(i) {
@@ -888,6 +930,8 @@ function viewWrapped(i) {
   if (it.k === "tal") body = `<div class="w1">Du stod på</div><div class="wbig">${s.n}</div><div class="w2">aktiviteter</div><div class="wst"><div><b>${s.timer} t</b>på post</div><div><b>${s.dage}</b>dage i felten</div><div><b>${s.others}</b>andre teamere ved din side</div></div><p class="wnote">Det er kun for dig. Ingen rangliste.</p><p class="wnote">Tryk til højre for at bladre. Hver dag har sin egen side.</p>`;
   if (it.k === "dag") { const dd = it.dd, face = dd.mood ? EV.mave[Math.max(0, Math.min(3, Math.round(dd.mood) - 1))][1] : "🎧"; body = `<div class="w1">${DAYS[dd.d] === "Søndag" ? "Dag 1" : "Dag " + (dd.d + 1)}</div><div class="wbig2" style="font-size:54px">${DAYS[dd.d]}</div><div style="font-size:70px;margin:8px 0">${face}</div>${dd.facts.map(f => `<div class="wfact">${f}</div>`).join("")}${dd.quote ? `<p class="wnote" style="font-style:italic">“${esc(dd.quote.slice(0, 110))}”</p>` : ""}`; }
   if (it.k === "fun") body = `<div class="w1">Fun facts</div><div class="wbig2" style="font-size:40px">Ugen i skøre tal 🤓</div>${funFacts(s).map(f => `<div class="wfact">${esc(f)}</div>`).join("")}`;
+  if (it.k === "brug") { const u = usageSummary(), tp = topUsed(u.brug, 5), mx = tp[0] ? tp[0][1] : 1; body = `<div class="w1">Din app-brug</div><div class="wbig2" style="font-size:40px">Du åbnede Lommeplan ${u.brug._aabninger || 0} gange 📱</div><div class="w2" style="font-size:16px;font-weight:600;opacity:.9">på ${u.dage} ${u.dage === 1 ? "dag" : "dage"}</div><div class="w1" style="margin-top:20px;font-weight:800">Dine mest brugte funktioner</div>${tp.map(([k, v]) => `<div class="wbarl"><span>${esc(featLabel(k))}</span><b>${v}</b></div><div class="wbar"><i style="width:${Math.max(6, Math.round(100 * v / mx))}%"></i></div>`).join("") || '<p class="wnote">Du har ikke brugt nogen funktioner endnu.</p>'}<p class="wnote">Tællerne ligger kun på din telefon, til du vælger at sende dem.</p>`; }
+  if (it.k === "appen") { const g = S.aggApp; let inner; if (g && g.teamere >= 3) { const rank = FEATURES.map(([k, l]) => [k, l, (g.funktioner[k] || { dev: 0 }).dev]).sort((a, b) => b[2] - a[2]), top = rank.slice(0, 5), bottom = rank.slice(-5).reverse(), pct = n => Math.round(100 * n / g.teamere); inner = `<div class="wcard"><b style="font-size:40px">${g.stjerner ?? "–"}</b><span>i snit på appen (1–5)</span><small>${g.teamere} teamere har sendt deres brug</small></div><div class="w1" style="margin-top:18px;font-weight:800">Mest brugt</div>${top.map(([k, l, n]) => `<div class="wbarl"><span>${esc(l)}</span><b>${pct(n)}%</b></div><div class="wbar"><i style="width:${pct(n)}%"></i></div>`).join("")}<div class="w1" style="margin-top:18px;font-weight:800">Mindst brugt</div>${bottom.map(([k, l, n]) => `<div class="wbarl"><span>${esc(l)}</span><b>${pct(n)}%</b></div><div class="wbar"><i style="width:${Math.max(2, pct(n))}%"></i></div>`).join("")}`; } else inner = `<div class="wcard"><span>Funktionerne rangeres, når mindst 3 teamere har evalueret appen.</span></div>`; body = `<div class="w1" style="font-size:26px;font-weight:800">Appen i ugens løb</div><div class="wnote">Hvor stor en del af teamet brugte hvilken funktion</div>${inner}`; }
   if (it.k === "udvikling") {
     const ds = it.days, W = 330, H = 190, px = k => 30 + (ds.length === 1 ? 135 : (k * 270) / (ds.length - 1)), py = m => 160 - ((m - 1) / 3) * 130;
     const first = ds[0].mood, last = ds[ds.length - 1].mood, peak = [...ds].sort((a, b) => b.mood - a.mood)[0], trend = last - first > 0.4 ? ["Din uge steg 📈", "Du sluttede højere, end du startede"] : last - first < -0.4 ? ["Ugen blev tungere 📉", "Det sker. Det er netop derfor, vi evaluerer"] : ["Stabil hele ugen ⚖️", "Jævn energi fra start til slut"];
@@ -896,7 +940,7 @@ function viewWrapped(i) {
       <p class="wnote" style="margin-top:18px">Toppen: ${DAYS[peak.d]} ${peak.best ? "· " + esc(S.data.aktiviteter[peak.best].titel.split(" (")[0]) : ""}</p>`;
   }
   if (it.k === "vibe") body = `<div class="w1">Din uge lød som</div><div class="wbig2">${esc(s.vibe[0])}</div><div class="w2" style="font-size:26px">${esc(s.vibe[1])}</div><div class="wface">${EV.mave.slice().reverse().map(([v, ic], k) => `<div><span>${ic}</span><i style="height:${12 + Math.round(70 * s.cnt[k] / Math.max(1, ...s.cnt))}px"></i><b>${s.cnt[k]}</b></div>`).join("")}</div>${s.fav ? `<p class="w1" style="margin-top:22px">Din favorit: ${esc(s.fav.a.titel.split(" (")[0])}</p>${s.fav.d.godtTekst ? `<p class="wnote" style="font-style:italic">“${esc(s.fav.d.godtTekst.slice(0, 110))}”</p>` : ""}` : ""}`;
-  if (it.k === "holdet") { const g = S.agg; body = `<div class="w1" style="font-size:26px;font-weight:800">Holdets billede</div><div class="wnote">Alle teamere samlet, ingen navne</div>` + (g && g.svar ? `<div class="wcard"><b style="font-size:44px">${g.mave ?? "–"}</b><span>i snit på mavefornemmelsen (1–4)</span><small>${g.teamere} teamere har svaret</small></div><div class="w1" style="margin-top:22px;font-weight:800">Mest nævnt til “10 % bedre”</div>${(g.bedre || []).slice(0, 3).map(b => `<div class="wbarl"><span>${esc(b.l)}</span><b>${b.pct}%</b></div><div class="wbar"><i style="width:${Math.min(100, b.pct * 2)}%"></i></div>`).join("") || '<p class="wnote">For få svar endnu.</p>'}` : `<div class="wcard"><span>Holdets billede dukker op, når nok teamere har svaret.</span></div>`); }
+  if (it.k === "holdet") { const g = S.agg; body = `<div class="w1" style="font-size:26px;font-weight:800">Teamets opsummering</div><div class="wnote">Alle teamere samlet, ingen navne</div>` + (g && g.svar ? `<div class="wcard"><b style="font-size:44px">${g.mave ?? "–"}</b><span>i snit på mavefornemmelsen (1–4)</span><small>${g.teamere} teamere har svaret</small></div><div class="w1" style="margin-top:22px;font-weight:800">Mest nævnt til “10 % bedre”</div>${(g.bedre || []).slice(0, 3).map(b => `<div class="wbarl"><span>${esc(b.l)}</span><b>${b.pct}%</b></div><div class="wbar"><i style="width:${Math.min(100, b.pct * 2)}%"></i></div>`).join("") || '<p class="wnote">For få svar endnu.</p>'}` : `<div class="wcard"><span>Teamets opsummering dukker op, når nok teamere har svaret.</span></div>`); }
   if (it.k === "tak") body = `<div class="w1" style="font-size:30px;font-weight:900;margin-top:40px">Tak for en alien-uge 👽</div><p class="wnote" style="font-size:15px;margin-top:14px">Dine svar bliver til PLan næste år.</p><a class="btn" href="#/eval" style="background:#fff;color:#000;margin-top:30px;text-decoration:none">Tilbage til Evaluering</a>`;
   return `<div class="wrap" style="background:linear-gradient(160deg,${G[0]},${G[1]})">${top}<div class="wbody">${body}</div><div class="wnav"><button data-act="wr:-1" aria-label="Forrige"></button><button data-act="wr:1" aria-label="Næste"></button></div>${sng ? `<div class="wplayer"><div class="wlab" style="margin:0 0 -2px;font-size:11px">🎵 ${esc(sng.titel)} · ${esc((S.data.aktiviteter[it.song] || {}).titel || "").split(" (")[0]}</div>${songEmbed(sng, 152, true)}</div>` : ""}</div>`;
 }
@@ -1021,7 +1065,8 @@ function render() {
   else if (r === "mine") h = viewMine();
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
   else if (r === "eval" && S.evalOn) {
-    if (a === "wrapped") { $app.innerHTML = viewWrapped(+b || 0); if (!S.agg) loadAgg(); return; }
+    if (a === "wrapped") { $app.innerHTML = viewWrapped(+b || 0); if (!S.agg) loadAgg(); if (!S.aggApp) loadAggApp(); return; }
+    if (a === "app") { if (!S.ap) S.ap = JSON.parse(JSON.stringify(S.appEval || { samtykke: true })); h = viewAppEval(); tab = "eval"; return $app.innerHTML = h + nav(tab), void 0; }
     if (a === "q" && !S.ev) { history.replaceState(null, "", "#/eval"); a = ""; }   // genåbnet app på et spørgsmål uden udkast: tilbage til checklisten
     h = viewEval(a); tab = "eval";
   }
@@ -1057,11 +1102,17 @@ async function tryUnlock(pw) {
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-act]"); if (!el || el.tagName === "INPUT" || el.tagName === "SELECT") return;
   const [act, ...p] = el.dataset.act.split(":");
+  if (!/^(ev|wr|ap|vq|tq|sq)/.test(act) || act === "evstart" || act === "evdone") track("act:" + act);
   if (el.closest("a")) ev.preventDefault();
   if (act === "claim") { const id = p.join(":"), doc = !!(S.me && S.data.aktiviteter[id] && (S.data.aktiviteter[id].bemanding.includes(S.me) || S.data.aktiviteter[id].ansvarligNavne.includes(S.me))); const now1 = mineAct(id); if (now1) { doc ? (S.claim[id] = -1) : delete S.claim[id]; } else { doc ? delete S.claim[id] : (S.claim[id] = 1); } saveClaim(); }
   else if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
   else if (act === "evaltoggle") { S.evalOn = !S.evalOn; ls.set("lp_eval_on", S.evalOn ? "1" : "0"); }
   else if (act === "evalall") { S.evalAll = !S.evalAll; ls.set("lp_eval_all", S.evalAll ? "1" : "0"); }
+  else if (act === "apexit") { S.ap = null; location.hash = "#/eval"; return; }
+  else if (act === "apstars") { S.ap.stjerner = +p[0]; }
+  else if (act === "apchip") { const f = p[0], k = p.slice(1).join(":"), arr = S.ap[f] = S.ap[f] || [], i = arr.indexOf(k); i >= 0 ? arr.splice(i, 1) : arr.push(k); }
+  else if (act === "apconsent") { S.ap.samtykke = S.ap.samtykke === false; }
+  else if (act === "apsend") { const u = usageSummary(); S.appEval = { ...S.ap, t: new Date().toISOString().slice(0, 16), sendt: 0 }; if (S.appEval.samtykke !== false) { S.appEval.brug = u.brug; S.appEval.dage = u.dage; } else { delete S.appEval.brug; } ls.set("lp_appeval", JSON.stringify(S.appEval)); S.ap = null; sendAppEval().then(() => render()); location.hash = "#/eval"; return; }
   else if (act === "evsong") { const s = songsOf(S.ev.akt)[+p[0]], f = document.querySelector(".box iframe"); if (s && f) f.src = "https://suno.com/embed/" + s.id; return; }
   else if (act === "evstart") { S.ev = { akt: p.join(":"), step: 1, d: JSON.parse(JSON.stringify(S.evals[p.join(":")] || {})) }; if (location.hash === "#/eval/q") render(); else location.hash = "#/eval/q"; window.scrollTo(0, 0); return; }
   else if (act === "evexit") { S.ev = null; location.hash = "#/eval"; return; }
@@ -1134,6 +1185,7 @@ document.addEventListener("click", ev => {
   render();
 });
 document.addEventListener("input", ev => {
+  if (ev.target.id && ev.target.id.startsWith("ap_") && S.ap) { S.ap[ev.target.id.slice(3)] = ev.target.value; return; }
   if (ev.target.id && ev.target.id.startsWith("ev_") && S.ev) { S.ev.d[ev.target.id.slice(3)] = ev.target.value; return; }
   if (ev.target.id === "sq") { S.sq = ev.target.value; const el = document.getElementById("sres"); if (el) el.innerHTML = soegResultater(S.sq); return; }
   if (ev.target.id === "vq") { S.vq = ev.target.value; const pos = ev.target.selectionStart; render(); const el = document.getElementById("vq"); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; }
@@ -1171,7 +1223,7 @@ window.addEventListener("hashchange", () => {
     if (S.data) { render(); window.scrollTo(0, 0); } else if (S.env) { S.loginErr = ""; tryUnlock(m[1]); }
     return;
   }
-  S.expand = false; render(); window.scrollTo(0, 0); });
+  S.expand = false; trackRoute(); render(); window.scrollTo(0, 0); });
 setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$|^#\/a\/[^/]+\/tid$/.test(location.hash)) render(); }, 30000);
 
 // ---------- opdateringer ----------
@@ -1216,5 +1268,5 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
     catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
-  render(); checkVersion(); setTimeout(() => flushEvals(), 4000);
+  trackDay(); track("_aabninger"); trackRoute(); render(); checkVersion(); setTimeout(() => flushEvals(), 4000);
 })();
