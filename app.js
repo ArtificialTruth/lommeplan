@@ -840,15 +840,65 @@ function wrapStats() {
   const vibe = avg >= 3.5 ? ["Alien-fest-pop", "med stjerner i øjnene"] : avg >= 2.8 ? ["Alien-folk", "rundt om bålet"] : avg >= 2 ? ["Synth", "under en tung himmel"] : ["Rolig ambient", "efter regn"];
   return { n: rows.length, timer: Math.round(mins / 60), dage, others: others.size, cnt, vibe, fav: fav && { a: S.data.aktiviteter[fav[0]], d: fav[1] }, favSong: ([...ratings].filter(([id]) => songsOf(id).length).sort((a, b) => b[1].mave - a[1].mave || (b[1].t || "").localeCompare(a[1].t || ""))[0] || [""])[0], avg };
 }
+const WR_GRAD = [["#3b0764", "#be185d"], ["#7c2d12", "#ea580c"], ["#134e4a", "#0891b2"], ["#312e81", "#7c3aed"], ["#14532d", "#65a30d"], ["#831843", "#db2777"], ["#1e3a8a", "#0ea5e9"]];
+function wrapDays(s) {   // én side pr. dag, du stod på noget
+  const rows = evalActs(), mine = new Set(rows.map(r => r.a.id)), out = [];
+  for (let d = 0; d < 6; d++) {
+    const evs = allEvents().filter(e => e.dato === DATES[d] && e.aktivitet && mine.has(e.aktivitet) && mineOn(e.aktivitet, e.dag)).sort((x, y) => x.start.localeCompare(y.start)); if (!evs.length) continue;
+    const mins = evs.reduce((t, e) => t + (mm(e.slut) - mm(e.start)), 0), rated = evs.filter(e => S.evals[e.aktivitet] && S.evals[e.aktivitet].mave), best = [...rated].sort((x, y) => S.evals[y.aktivitet].mave - S.evals[x.aktivitet].mave || x.start.localeCompare(y.start))[0];
+    const longest = [...evs].sort((x, y) => (mm(y.slut) - mm(y.start)) - (mm(x.slut) - mm(x.start)))[0], last = evs[evs.length - 1], first = evs[0];
+    const others = new Set(evs.flatMap(e => S.data.aktiviteter[e.aktivitet].bemanding).filter(n => n !== S.me));
+    const mood = rated.length ? rated.reduce((t, e) => t + S.evals[e.aktivitet].mave, 0) / rated.length : 0, T = e => esc(e.titel.split(" (")[0]);
+    const facts = [`${evs.length} ${evs.length === 1 ? "aktivitet" : "aktiviteter"} og ${Math.floor(mins / 60)} t ${mins % 60 ? (mins % 60) + " min " : ""}på post`, `Først på banen: ${T(first)} kl. ${first.start}`, `Længste: ${T(longest)} (${Math.round((mm(longest.slut) - mm(longest.start)) / 6) / 10} t)`];
+    if (mm(last.slut) >= 22 * 60) facts.push(`Nat-vagt: ${T(last)} sluttede kl. ${last.slut}`); else if (others.size) facts.push(`Du delte dagen med ${others.size} andre teamere`);
+    if (best) facts.push(`Dagens højdepunkt: ${T(best)} ${EV.mave.find(m => m[0] === S.evals[best.aktivitet].mave)[1]}`);
+    out.push({ d, evs, mins, mood, facts, best: best && best.aktivitet, songAct: (best && songsOf(best.aktivitet).length ? best.aktivitet : evs.map(e => e.aktivitet).find(id => songsOf(id).length)) || "", quote: best && S.evals[best.aktivitet].godtTekst });
+  }
+  return out;
+}
+function funFacts(s) {
+  const D = S.data, evK = D.events.filter(e => e.maalgruppe === "kursist"), dur = e => mm(e.slut) - mm(e.start);
+  const longest = [...evK].filter(e => e.aktivitet).sort((a, b) => dur(b) - dur(a))[0], mostStaffed = Object.values(D.aktiviteter).sort((a, b) => b.bemanding.length - a.bemanding.length)[0];
+  const songs = Object.values(D.sange || {}).reduce((n, l) => n + l.length, 0), kursistTimer = Math.round(evK.reduce((t, e) => t + dur(e), 0) / 60), hrs = s.timer || 0;
+  const f = [
+    `Ugen havde ${evK.length} programpunkter for kursisterne, ca. ${kursistTimer} timer i alt`,
+    longest ? `Længste aktivitet: ${longest.titel.split(" (")[0]} (${Math.floor(dur(longest) / 60)} t ${dur(longest) % 60} min)` : "",
+    `${mostStaffed.bemanding.length} teamere stod på ${mostStaffed.titel.split(" (")[0]}, ugens mest bemandede`,
+    `${D.personer.length} teamere, ${(D.patruljer || []).length} patruljer og ${songs} Suno-sange blev det til`,
+    "Patruljens halve døgn varede 19,5 timer, fra tirsdag kl. 15:00 til onsdag kl. 10:30",
+    "5 shelters i Gribskov var booket, og 2,2 km var gåturen til stationen",
+  ];
+  if (hrs) f.push(`Dine ${hrs} timer på post svarer til ca. ${Math.max(1, Math.round(hrs / 1.5))} fodboldkampe eller ${Math.max(1, Math.round(hrs / 3.25))} gange Titanic`);
+  return f.filter(Boolean);
+}
+function wrapSlides() {
+  const s = wrapStats(), days = wrapDays(s), topAct = wrapTopActivity(), sl = [];
+  sl.push({ k: "tal", song: topAct });
+  days.forEach(dd => sl.push({ k: "dag", dd, song: dd.songAct }));
+  sl.push({ k: "fun", song: "9" });
+  if (days.filter(x => x.mood).length >= 2) sl.push({ k: "udvikling", days: days.filter(x => x.mood) });
+  sl.push({ k: "vibe", song: s.favSong }, { k: "holdet", song: "20" }, { k: "tak", song: "7" });
+  return { s, sl };
+}
 function viewWrapped(i) {
-  const s = wrapStats(), G = [["#3b0764", "#be185d"], ["#064e3b", "#0ea5e9"], ["#1e3a8a", "#7c3aed"], ["#7c2d12", "#db2777"]][i] || ["#3b0764", "#be185d"], N = 4;
-  const topAct = wrapTopActivity(), pick = [topAct, s.favSong, "20", "7"][i], sng = (songsOf(pick)[songsOf(pick).length - 1] || null), top = `<div class="wtop">${[...Array(N)].map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div><div class="wlab"><span>🎧 DIN UGE · PLanstar 2026</span><a href="#/eval" style="color:#fff;text-decoration:none;font-size:18px">✕</a></div>`;
+  const { s, sl } = wrapSlides(), N = sl.length; i = Math.max(0, Math.min(N - 1, i));
+  const it = sl[i], G = WR_GRAD[i % WR_GRAD.length], sng = it.song && (songsOf(it.song)[songsOf(it.song).length - 1] || null);
+  const top = `<div class="wtop">${[...Array(N)].map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div><div class="wlab"><span>🎧 DIN UGE · PLanstar 2026</span><a href="#/eval" style="color:#fff;text-decoration:none;font-size:18px">✕</a></div>`;
   let body = "";
-  if (i === 0) body = `<div class="w1">Du stod på</div><div class="wbig">${s.n}</div><div class="w2">aktiviteter</div><div class="wst"><div><b>${s.timer} t</b>på post</div><div><b>${s.dage}</b>dage i felten</div><div><b>${s.others}</b>andre teamere ved din side</div></div><p class="wnote">Det er kun for dig. Ingen rangliste.</p>`;
-  if (i === 1) body = `<div class="w1">Din uge lød som</div><div class="wbig2">${esc(s.vibe[0])}</div><div class="w2" style="font-size:26px">${esc(s.vibe[1])}</div><div class="wface">${EV.mave.slice().reverse().map(([v, ic], k) => `<div><span>${ic}</span><i style="height:${12 + Math.round(70 * s.cnt[k] / Math.max(1, ...s.cnt))}px"></i><b>${s.cnt[k]}</b></div>`).join("")}</div>${s.fav ? `<p class="w1" style="margin-top:22px">Din favorit: ${esc(s.fav.a.titel.split(" (")[0])} ${(S.data.memer || {})[s.fav.a.id] ? "" : ""}</p>${s.fav.d.godtTekst ? `<p class="wnote" style="font-style:italic">“${esc(s.fav.d.godtTekst.slice(0, 110))}”</p>` : ""}` : ""}`;
-  if (i === 2) { const g = S.agg; body = `<div class="w1" style="font-size:26px;font-weight:800">Holdets billede</div><div class="wnote">Alle teamere samlet, ingen navne</div>` + (g && g.svar ? `<div class="wcard"><b style="font-size:44px">${g.mave ?? "–"}</b><span>i snit på mavefornemmelsen (1–4)</span><small>${g.teamere} teamere har svaret</small></div><div class="w1" style="margin-top:22px;font-weight:800">Mest nævnt til “10 % bedre”</div>${(g.bedre || []).slice(0, 3).map(b => `<div class="wbarl"><span>${esc(b.l)}</span><b>${b.pct}%</b></div><div class="wbar"><i style="width:${Math.min(100, b.pct * 2)}%"></i></div>`).join("") || '<p class="wnote">For få svar endnu.</p>'}` : `<div class="wcard"><span>Holdets billede dukker op, når nok teamere har svaret.</span></div>`); }
-  if (i === 3) body = `<div class="w1" style="font-size:30px;font-weight:900;margin-top:40px">Tak for en alien-uge 👽</div><p class="wnote" style="font-size:15px;margin-top:14px">Dine svar bliver til PLan næste år.</p><a class="btn" href="#/eval" style="background:#fff;color:#000;margin-top:30px;text-decoration:none">Tilbage til Evaluering</a>`;
-  return `<div class="wrap" style="background:linear-gradient(160deg,${G[0]},${G[1]})">${top}<div class="wbody">${body}</div><div class="wnav"><button data-act="wr:-1" aria-label="Forrige"></button><button data-act="wr:1" aria-label="Næste"></button></div>${sng ? `<div class="wplayer"><div class="wlab" style="margin:0 0 -2px;font-size:11px">🎵 ${esc(sng.titel)} · ${esc((S.data.aktiviteter[pick] || {}).titel || "").split(" (")[0]}</div>${songEmbed(sng, 152, true)}</div>` : ""}</div>`;
+  if (it.k === "tal") body = `<div class="w1">Du stod på</div><div class="wbig">${s.n}</div><div class="w2">aktiviteter</div><div class="wst"><div><b>${s.timer} t</b>på post</div><div><b>${s.dage}</b>dage i felten</div><div><b>${s.others}</b>andre teamere ved din side</div></div><p class="wnote">Det er kun for dig. Ingen rangliste.</p><p class="wnote">Tryk til højre for at bladre. Hver dag har sin egen side.</p>`;
+  if (it.k === "dag") { const dd = it.dd, face = dd.mood ? EV.mave[Math.max(0, Math.min(3, Math.round(dd.mood) - 1))][1] : "🎧"; body = `<div class="w1">${DAYS[dd.d] === "Søndag" ? "Dag 1" : "Dag " + (dd.d + 1)}</div><div class="wbig2" style="font-size:54px">${DAYS[dd.d]}</div><div style="font-size:70px;margin:8px 0">${face}</div>${dd.facts.map(f => `<div class="wfact">${f}</div>`).join("")}${dd.quote ? `<p class="wnote" style="font-style:italic">“${esc(dd.quote.slice(0, 110))}”</p>` : ""}`; }
+  if (it.k === "fun") body = `<div class="w1">Fun facts</div><div class="wbig2" style="font-size:40px">Ugen i skøre tal 🤓</div>${funFacts(s).map(f => `<div class="wfact">${esc(f)}</div>`).join("")}`;
+  if (it.k === "udvikling") {
+    const ds = it.days, W = 330, H = 190, px = k => 30 + (ds.length === 1 ? 135 : (k * 270) / (ds.length - 1)), py = m => 160 - ((m - 1) / 3) * 130;
+    const first = ds[0].mood, last = ds[ds.length - 1].mood, peak = [...ds].sort((a, b) => b.mood - a.mood)[0], trend = last - first > 0.4 ? ["Din uge steg 📈", "Du sluttede højere, end du startede"] : last - first < -0.4 ? ["Ugen blev tungere 📉", "Det sker. Det er netop derfor, vi evaluerer"] : ["Stabil hele ugen ⚖️", "Jævn energi fra start til slut"];
+    body = `<div class="w1">Din udvikling over ugen</div><div class="wbig2" style="font-size:36px">${esc(trend[0])}</div><div class="w2" style="font-size:16px;font-weight:600;opacity:.9">${esc(trend[1])}</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;margin-top:20px;overflow:visible"><polyline fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" points="${ds.map((x, k) => px(k) + "," + py(x.mood)).join(" ")}" opacity=".9"/>${ds.map((x, k) => `<circle cx="${px(k)}" cy="${py(x.mood)}" r="${x === peak ? 9 : 6}" fill="${x === peak ? "#fde047" : "#fff"}"/><text x="${px(k)}" y="${py(x.mood) - 16}" text-anchor="middle" font-size="20">${EV.mave[Math.max(0, Math.min(3, Math.round(x.mood) - 1))][1]}</text><text x="${px(k)}" y="${H - 6}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">${DAYS[x.d].slice(0, 3)}</text>`).join("")}</svg>
+      <p class="wnote" style="margin-top:18px">Toppen: ${DAYS[peak.d]} ${peak.best ? "· " + esc(S.data.aktiviteter[peak.best].titel.split(" (")[0]) : ""}</p>`;
+  }
+  if (it.k === "vibe") body = `<div class="w1">Din uge lød som</div><div class="wbig2">${esc(s.vibe[0])}</div><div class="w2" style="font-size:26px">${esc(s.vibe[1])}</div><div class="wface">${EV.mave.slice().reverse().map(([v, ic], k) => `<div><span>${ic}</span><i style="height:${12 + Math.round(70 * s.cnt[k] / Math.max(1, ...s.cnt))}px"></i><b>${s.cnt[k]}</b></div>`).join("")}</div>${s.fav ? `<p class="w1" style="margin-top:22px">Din favorit: ${esc(s.fav.a.titel.split(" (")[0])}</p>${s.fav.d.godtTekst ? `<p class="wnote" style="font-style:italic">“${esc(s.fav.d.godtTekst.slice(0, 110))}”</p>` : ""}` : ""}`;
+  if (it.k === "holdet") { const g = S.agg; body = `<div class="w1" style="font-size:26px;font-weight:800">Holdets billede</div><div class="wnote">Alle teamere samlet, ingen navne</div>` + (g && g.svar ? `<div class="wcard"><b style="font-size:44px">${g.mave ?? "–"}</b><span>i snit på mavefornemmelsen (1–4)</span><small>${g.teamere} teamere har svaret</small></div><div class="w1" style="margin-top:22px;font-weight:800">Mest nævnt til “10 % bedre”</div>${(g.bedre || []).slice(0, 3).map(b => `<div class="wbarl"><span>${esc(b.l)}</span><b>${b.pct}%</b></div><div class="wbar"><i style="width:${Math.min(100, b.pct * 2)}%"></i></div>`).join("") || '<p class="wnote">For få svar endnu.</p>'}` : `<div class="wcard"><span>Holdets billede dukker op, når nok teamere har svaret.</span></div>`); }
+  if (it.k === "tak") body = `<div class="w1" style="font-size:30px;font-weight:900;margin-top:40px">Tak for en alien-uge 👽</div><p class="wnote" style="font-size:15px;margin-top:14px">Dine svar bliver til PLan næste år.</p><a class="btn" href="#/eval" style="background:#fff;color:#000;margin-top:30px;text-decoration:none">Tilbage til Evaluering</a>`;
+  return `<div class="wrap" style="background:linear-gradient(160deg,${G[0]},${G[1]})">${top}<div class="wbody">${body}</div><div class="wnav"><button data-act="wr:-1" aria-label="Forrige"></button><button data-act="wr:1" aria-label="Næste"></button></div>${sng ? `<div class="wplayer"><div class="wlab" style="margin:0 0 -2px;font-size:11px">🎵 ${esc(sng.titel)} · ${esc((S.data.aktiviteter[it.song] || {}).titel || "").split(" (")[0]}</div>${songEmbed(sng, 152, true)}</div>` : ""}</div>`;
 }
 
 function viewLogin() {
@@ -1021,7 +1071,7 @@ document.addEventListener("click", ev => {
   else if (act === "evstars") { S.ev.d.indsigt = +p[0]; if (evPartial()) return; }
   else if (act === "evchip") { const f = p[0], l = p.slice(1).join(":"), arr = S.ev.d[f] = S.ev.d[f] || []; const i = arr.indexOf(l); i >= 0 ? arr.splice(i, 1) : arr.push(l); if (evPartial()) return; }
   else if (act === "evdone") { S.ev.d.t = new Date().toISOString().slice(0, 16); S.evals[S.ev.akt] = S.ev.d; S.evSent[S.ev.akt] = 0; saveEvals(); const k = S.ev.akt; S.ev = null; sendEval(k).then(() => render()); location.hash = "#/eval"; return; }
-  else if (act === "wr") { const m = location.hash.match(/wrapped\/(\d)/), i = Math.max(0, Math.min(3, (m ? +m[1] : 0) + +p[0])); location.hash = "#/eval/wrapped/" + i; return; }
+  else if (act === "wr") { const m = location.hash.match(/wrapped\/(\d+)/), N = wrapSlides().sl.length, i = Math.max(0, Math.min(N - 1, (m ? +m[1] : 0) + +p[0])); location.hash = "#/eval/wrapped/" + i; return; }
   else if (act === "vopen") { S.vopen = !S.vopen; S.vq = ""; }
   else if (act === "vset") { S.viewAs = p.join(":"); ls.set("lp_viewas", S.viewAs); S.vopen = false; S.vq = ""; if (!partnersOf(S.viewAs).length) S.withPartner = false; }
   else if (act === "vpartner") { S.withPartner = !S.withPartner; ls.set("lp_partner", S.withPartner ? "1" : "0"); }
