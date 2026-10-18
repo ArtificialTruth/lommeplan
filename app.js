@@ -903,6 +903,23 @@ function funFacts(s) {
   if (hrs) f.push(`Dine ${hrs} timer på post svarer til ca. ${Math.max(1, Math.round(hrs / 1.5))} fodboldkampe eller ${Math.max(1, Math.round(hrs / 3.25))} gange Titanic`);
   return f.filter(Boolean);
 }
+const PERSONAS = {
+  alien: ["Alien-ambassadøren", "alien", "ALT ER FEDT.\nJEG HAR IKKE SET\nET PROBLEM", "STADIG IKKE.\nTAK FOR MAD."],
+  kritiker: ["Kritikeren med regneark", "magnifier", "DEN 10 % BEDRE-LISTE\nBLEV LÆNGERE", "END SELVE PROGRAMMET"],
+  traet: ["Den trætte helt", "cup", "KAFFE ER\nEN PERSONLIGHED", "SOVEPOSE: 1\nENERGI: 0"],
+  kaos: ["Kaosnavigatøren", "flag", "HVOR SKAL JEG STÅ?\nINGEN VED DET", "JEG STÅR DER ALLIGEVEL"],
+  forfatter: ["Forfatteren", "pot", "KUN ET FELT\nTIL FRI TEKST?", "JEG HAR EN ROMAN"],
+  bal: ["Stemningsmageren", "fire", "ALLE ER GLADE.\nBÅLET BRÆNDER", "JEG ER ÅRSAGEN"],
+  filosof: ["Den rolige filosof", "moon", "GOD NOK ER\nOGSÅ EN FØLELSE", "VI SES TIL NÆSTE PLAN"],
+};
+function wrapPersona() {
+  const ev = Object.values(S.evals), n = ev.length || 1, avg = k => ev.filter(e => e[k]).reduce((t, e) => t + e[k], 0) / (ev.filter(e => e[k]).length || 1);
+  const cnt = (f, v) => ev.reduce((t, e) => t + (v ? (e[f] || []).filter(x => x === v).length : (e[f] || []).length), 0), stem = EV.stemning.map(x => [x, cnt("stemning", x)]).sort((a, b) => b[1] - a[1])[0];
+  const txt = ev.reduce((t, e) => t + ["godtTekst", "bedreTekst", "behov"].reduce((q, f) => q + (e[f] || "").length, 0), 0) / n, bedre = cnt("bedre") / n, savnet = (cnt("savnet") - cnt("savnet", "Ingen mangler")) / n, mave = avg("mave"), godtTop = (cnt("godt", "God stemning") + cnt("godt", "Godt samarbejde")) / n;
+  const sc = { alien: (mave >= 3.5 ? 2 : 0) + (bedre < 1 ? 1.5 : 0) + (savnet < 0.5 ? 1 : 0), kritiker: bedre >= 2 ? bedre : bedre / 2, traet: (stem && stem[0] === "Trætte" ? 2 + stem[1] / n : 0) + (mave && mave < 2.5 ? 0.5 : 0), kaos: savnet >= 0.8 ? 1.5 + savnet : savnet, forfatter: txt >= 60 ? 2 + txt / 80 : 0, bal: (stem && ["Glade", "Spændte"].includes(stem[0]) ? 1 : 0) + godtTop * 1.5, filosof: 1.2 };
+  const k = Object.entries(sc).sort((a, b) => b[1] - a[1])[0][0], why = { alien: "Du gav gennemgående top-karakterer og fandt få ting at rette.", kritiker: "Du pegede på mange ting, der kunne gøres 10 % bedre.", traet: "Teamet var mest trætte, når du svarede.", kaos: "Du savnede ofte info, materialer eller instruktion.", forfatter: "Du skrev langt mere end de fleste.", bal: "Du pegede på stemning og samarbejde som det bedste.", filosof: "Dine svar lå roligt og afbalanceret midt imellem." }[k];
+  return { k, nav: PERSONAS[k][0], ikon: PERSONAS[k][1], top: PERSONAS[k][2], bottom: PERSONAS[k][3], why };
+}
 function wrapSlides() {
   const s = wrapStats(), days = wrapDays(s), topAct = wrapTopActivity(), sl = [];
   sl.push({ k: "tal", song: topAct });
@@ -910,7 +927,7 @@ function wrapSlides() {
   if (s.together.length >= 2) sl.push({ k: "tid" });
   sl.push({ k: "fun", song: "9" });
   if (days.filter(x => x.mood).length >= 2) sl.push({ k: "udvikling", days: days.filter(x => x.mood) });
-  sl.push({ k: "vibe", song: s.favSong }, { k: "holdet", song: "20" }, { k: "appen" }, { k: "tak", song: "7" });
+  sl.push({ k: "vibe", song: s.favSong }, { k: "type" }, { k: "holdet", song: "20" }, { k: "appen" }, { k: "tak", song: "7" });
   return { s, sl };
 }
 function viewWrapped(i) {
@@ -930,6 +947,7 @@ function viewWrapped(i) {
       <p class="wnote" style="margin-top:18px">Toppen: ${DAYS[peak.d]} ${peak.best ? "· " + esc(S.data.aktiviteter[peak.best].titel.split(" (")[0]) : ""}</p>`;
   }
   if (it.k === "tid") { const t = s.together, mx = t[0][1], fmt = m => m >= 60 ? Math.floor(m / 60) + " t" + (m % 60 ? " " + m % 60 + " min" : "") : m + " min"; body = `<div class="w1">Du brugte mest tid med</div><div class="wbig2" style="font-size:44px">${esc(t[0][0])} 🤝</div><div class="w2" style="font-size:16px;font-weight:600;opacity:.9">${fmt(t[0][1])} side om side på post</div><div class="w1" style="margin-top:20px;font-weight:800">Din top ${t.length}</div>${t.map(([n, m]) => `<div class="wbarl"><span>${esc(n)}</span><b>${fmt(m)}</b></div><div class="wbar"><i style="width:${Math.max(6, Math.round(100 * m / mx))}%"></i></div>`).join("")}<p class="wnote">Regnet ud fra, hvor mange minutter I stod på de samme aktiviteter.</p>`; }
+  if (it.k === "type") { const pr = wrapPersona(); body = `<div class="w1">Din type i teamet</div><div class="wbig2" style="font-size:34px">${esc(pr.nav)}</div><div class="box" style="padding:8px;margin:14px 0">${memeSvg(pr)}</div><p class="wnote">${esc(pr.why)}</p><p class="wnote">Udregnet på din telefon ud fra dine egne svar. Ingen andre ser den.</p>`; }
   if (it.k === "vibe") body = `<div class="w1">Din uge lød som</div><div class="wbig2">${esc(s.vibe[0])}</div><div class="w2" style="font-size:26px">${esc(s.vibe[1])}</div><div class="wface">${EV.mave.slice().reverse().map(([v, ic], k) => `<div><span>${ic}</span><i style="height:${12 + Math.round(70 * s.cnt[k] / Math.max(1, ...s.cnt))}px"></i><b>${s.cnt[k]}</b></div>`).join("")}</div>${s.fav ? `<p class="w1" style="margin-top:22px">Din favorit: ${esc(s.fav.a.titel.split(" (")[0])}</p>${s.fav.d.godtTekst ? `<p class="wnote" style="font-style:italic">“${esc(s.fav.d.godtTekst.slice(0, 110))}”</p>` : ""}` : ""}`;
   if (it.k === "holdet") { const g = S.agg; body = `<div class="w1" style="font-size:26px;font-weight:800">Teamets opsummering</div><div class="wnote">Alle teamere samlet, ingen navne</div>` + (g && g.svar ? `<div class="wcard"><b style="font-size:44px">${g.mave ?? "–"}</b><span>i snit på mavefornemmelsen (1–4)</span><small>${g.teamere} teamere har svaret</small></div><div class="w1" style="margin-top:22px;font-weight:800">Mest nævnt til “10 % bedre”</div>${(g.bedre || []).slice(0, 3).map(b => `<div class="wbarl"><span>${esc(b.l)}</span><b>${b.pct}%</b></div><div class="wbar"><i style="width:${Math.min(100, b.pct * 2)}%"></i></div>`).join("") || '<p class="wnote">For få svar endnu.</p>'}` : `<div class="wcard"><span>Teamets opsummering dukker op, når nok teamere har svaret.</span></div>`); }
   if (it.k === "tak") body = `<div class="w1" style="font-size:30px;font-weight:900;margin-top:40px">Tak for en alien-uge 👽</div><p class="wnote" style="font-size:15px;margin-top:14px">Dine svar bliver til PLan næste år.</p><a class="btn" href="#/eval" style="background:#fff;color:#000;margin-top:30px;text-decoration:none">Tilbage til Evaluering</a>`;
