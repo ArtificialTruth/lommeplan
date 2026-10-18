@@ -756,17 +756,6 @@ const FEATURES = [
   ["act:theme", "Lys/mørkt udseende"], ["view:eval", "Evaluering"], ["view:eval:wrapped", "Wrapped"], ["link:maps", "Google Maps-links"], ["link:doc", "Åbn original-doc"], ["act:plcopy", "Del PL-plan som tekst"],
 ];
 const featLabel = k => (FEATURES.find(f => f[0] === k) || [k, k])[1];
-function track(k) { try { const u = JSON.parse(ls.get("lp_usage", "{}")); u[k] = (u[k] || 0) + 1; ls.set("lp_usage", JSON.stringify(u)); } catch {} }
-function trackDay() { try { const d = new Date().toISOString().slice(0, 10), l = JSON.parse(ls.get("lp_usage_days", "[]")); if (!l.includes(d)) { l.push(d); ls.set("lp_usage_days", JSON.stringify(l)); } } catch {} }
-function trackRoute() {
-  const [r, a, b] = location.hash.replace(/^#\/?/, "").split("/"); if (!r || r.startsWith("u=")) return;
-  if (r === "a") track("view:a:" + (b || "resume")); else if (r === "eval") track("view:eval" + (a === "wrapped" ? ":wrapped" : "")); else if (r === "patruljer") track("view:patruljer:" + (a || "liste")); else track("view:" + r);
-}
-document.addEventListener("click", ev => {   // links ud af appen
-  const a = ev.target.closest && ev.target.closest("a[href]"); if (!a) return; const h = a.getAttribute("href") || "";
-  if (/^(tel|sms):/.test(h)) track("link:tel"); else if (/google\.com\/maps/.test(h)) track("link:maps"); else if (/docs\.google|drive\.google/.test(h)) track("link:doc");
-}, true);
-const usageSummary = () => { let u = {}; try { u = JSON.parse(ls.get("lp_usage", "{}")); } catch {} return { brug: u, dage: (() => { try { return JSON.parse(ls.get("lp_usage_days", "[]")).length; } catch { return 0; } })() }; };
 
 // ---------- Evaluering + Wrapped (testfane: slås til under Mig) ----------
 Object.assign(S, {
@@ -856,16 +845,14 @@ async function sendAppEval() {
   return false;
 }
 async function loadAggApp() { try { const r = await evCall("/app-aggregat"); if (r.ok) { S.aggApp = await r.json(); if (/^#\/eval\/wrapped/.test(location.hash)) render(); } } catch {} }
-function topUsed(u, n = 5) { return Object.entries(u || {}).filter(([k, v]) => !k.startsWith("_") && v > 0 && FEATURES.some(f => f[0] === k)).sort((a, b) => b[1] - a[1]).slice(0, n); }
 function viewAppEval() {
-  const d = S.ap, u = usageSummary(), top = topUsed(u.brug, 3), chips = (f) => `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">${FEATURES.map(([k, l]) => `<button class="pill ${(d[f] || []).includes(k) ? "on" : ""}" data-act="apchip:${f}:${esc(k)}" style="${(d[f] || []).includes(k) ? "background:#d9f7e6;color:#000;border-color:var(--act)" : "color:var(--tx)"};padding:6px 11px;font-size:12px">${esc(l)}</button>`).join("")}</div>`;
+  const d = S.ap, chips = (f) => `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">${FEATURES.map(([k, l]) => `<button class="pill ${(d[f] || []).includes(k) ? "on" : ""}" data-act="apchip:${f}:${esc(k)}" style="${(d[f] || []).includes(k) ? "background:#d9f7e6;color:#000;border-color:var(--act)" : "color:var(--tx)"};padding:6px 11px;font-size:12px">${esc(l)}</button>`).join("")}</div>`;
   return `<div style="display:flex;justify-content:space-between;align-items:center"><button data-act="apexit" style="font-size:20px;color:var(--mu)">✕</button><b>Evaluér appen</b><span></span></div>
     <h1 style="font-size:24px;margin:14px 0 6px">Hvor god har Lommeplan været?</h1><div style="display:flex;justify-content:center;gap:4px">${[1, 2, 3, 4, 5].map(i => `<button data-act="apstars:${i}" style="font-size:42px;color:${i <= (d.stjerner || 0) ? "#f2c91b" : "var(--line)"}" aria-label="${i} stjerner">★</button>`).join("")}</div>
     <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad brugte du mest?</h2>${chips("mest")}
     <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad brugte du næsten aldrig?</h2>${chips("mindst")}
     <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad savnede du i appen?</h2><textarea id="ap_mangler" placeholder="Fx: Et kort over Gribskov …" style="min-height:70px">${esc(d.mangler || "")}</textarea>
     <h2 style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--tx)">Hvad irriterede dig?</h2><textarea id="ap_irriterer" placeholder="Fx: Teksten var for lille …" style="min-height:70px">${esc(d.irriterer || "")}</textarea>
-    <div class="box" style="margin-top:14px"><div class="line" style="padding:0"><div style="flex:1"><b>Send min anonyme brug med</b><div class="muted" style="font-size:12px">Kun hvor mange gange du har brugt hver funktion. Intet indhold, ingen navne.${top.length ? " Dine mest brugte: " + top.map(([k, v]) => esc(featLabel(k)) + " (" + v + ")").join(", ") + "." : ""}</div></div><button class="toggle ${d.samtykke !== false ? "on" : ""}" data-act="apconsent" aria-label="Send brug"></button></div></div>
     <button class="btn" data-act="apsend" style="margin-top:14px">Gem og send</button>${S.data.evalUrl ? "" : '<div class="hint">Serveren er ikke sat op endnu. Svar gemmes kun på din telefon.</div>'}`;
 }
 function wrapTopActivity() {
@@ -917,7 +904,7 @@ function wrapSlides() {
   const s = wrapStats(), days = wrapDays(s), topAct = wrapTopActivity(), sl = [];
   sl.push({ k: "tal", song: topAct });
   days.forEach(dd => sl.push({ k: "dag", dd, song: dd.songAct }));
-  sl.push({ k: "fun", song: "9" }, { k: "brug" });
+  sl.push({ k: "fun", song: "9" });
   if (days.filter(x => x.mood).length >= 2) sl.push({ k: "udvikling", days: days.filter(x => x.mood) });
   sl.push({ k: "vibe", song: s.favSong }, { k: "holdet", song: "20" }, { k: "appen" }, { k: "tak", song: "7" });
   return { s, sl };
@@ -930,8 +917,7 @@ function viewWrapped(i) {
   if (it.k === "tal") body = `<div class="w1">Du stod på</div><div class="wbig">${s.n}</div><div class="w2">aktiviteter</div><div class="wst"><div><b>${s.timer} t</b>på post</div><div><b>${s.dage}</b>dage i felten</div><div><b>${s.others}</b>andre teamere ved din side</div></div><p class="wnote">Det er kun for dig. Ingen rangliste.</p><p class="wnote">Tryk til højre for at bladre. Hver dag har sin egen side.</p>`;
   if (it.k === "dag") { const dd = it.dd, face = dd.mood ? EV.mave[Math.max(0, Math.min(3, Math.round(dd.mood) - 1))][1] : "🎧"; body = `<div class="w1">${DAYS[dd.d] === "Søndag" ? "Dag 1" : "Dag " + (dd.d + 1)}</div><div class="wbig2" style="font-size:54px">${DAYS[dd.d]}</div><div style="font-size:70px;margin:8px 0">${face}</div>${dd.facts.map(f => `<div class="wfact">${f}</div>`).join("")}${dd.quote ? `<p class="wnote" style="font-style:italic">“${esc(dd.quote.slice(0, 110))}”</p>` : ""}`; }
   if (it.k === "fun") body = `<div class="w1">Fun facts</div><div class="wbig2" style="font-size:40px">Ugen i skøre tal 🤓</div>${funFacts(s).map(f => `<div class="wfact">${esc(f)}</div>`).join("")}`;
-  if (it.k === "brug") { const u = usageSummary(), tp = topUsed(u.brug, 5), mx = tp[0] ? tp[0][1] : 1; body = `<div class="w1">Din app-brug</div><div class="wbig2" style="font-size:40px">Du åbnede Lommeplan ${u.brug._aabninger || 0} gange 📱</div><div class="w2" style="font-size:16px;font-weight:600;opacity:.9">på ${u.dage} ${u.dage === 1 ? "dag" : "dage"}</div><div class="w1" style="margin-top:20px;font-weight:800">Dine mest brugte funktioner</div>${tp.map(([k, v]) => `<div class="wbarl"><span>${esc(featLabel(k))}</span><b>${v}</b></div><div class="wbar"><i style="width:${Math.max(6, Math.round(100 * v / mx))}%"></i></div>`).join("") || '<p class="wnote">Du har ikke brugt nogen funktioner endnu.</p>'}<p class="wnote">Tællerne ligger kun på din telefon, til du vælger at sende dem.</p>`; }
-  if (it.k === "appen") { const g = S.aggApp; let inner; if (g && g.teamere >= 3) { const rank = FEATURES.map(([k, l]) => [k, l, (g.funktioner[k] || { dev: 0 }).dev]).sort((a, b) => b[2] - a[2]), top = rank.slice(0, 5), bottom = rank.slice(-5).reverse(), pct = n => Math.round(100 * n / g.teamere); inner = `<div class="wcard"><b style="font-size:40px">${g.stjerner ?? "–"}</b><span>i snit på appen (1–5)</span><small>${g.teamere} teamere har sendt deres brug</small></div><div class="w1" style="margin-top:18px;font-weight:800">Mest brugt</div>${top.map(([k, l, n]) => `<div class="wbarl"><span>${esc(l)}</span><b>${pct(n)}%</b></div><div class="wbar"><i style="width:${pct(n)}%"></i></div>`).join("")}<div class="w1" style="margin-top:18px;font-weight:800">Mindst brugt</div>${bottom.map(([k, l, n]) => `<div class="wbarl"><span>${esc(l)}</span><b>${pct(n)}%</b></div><div class="wbar"><i style="width:${Math.max(2, pct(n))}%"></i></div>`).join("")}`; } else inner = `<div class="wcard"><span>Funktionerne rangeres, når mindst 3 teamere har evalueret appen.</span></div>`; body = `<div class="w1" style="font-size:26px;font-weight:800">Appen i ugens løb</div><div class="wnote">Hvor stor en del af teamet brugte hvilken funktion</div>${inner}`; }
+  if (it.k === "appen") { const g = S.aggApp; let inner; if (g && g.svar >= 3) { const lst = (o) => Object.entries(o || {}).sort((x, y) => y[1] - x[1]).slice(0, 5), box = (t, o) => `<div class="w1" style="margin-top:18px;font-weight:800">${t}</div>${lst(o).map(([k, n]) => `<div class="wbarl"><span>${esc(featLabel(k))}</span><b>${Math.round(100 * n / g.svar)}%</b></div><div class="wbar"><i style="width:${Math.round(100 * n / g.svar)}%"></i></div>`).join("") || '<p class="wnote">Ingen er helt enige endnu.</p>'}`; inner = `<div class="wcard"><b style="font-size:40px">${g.stjerner ?? "–"}</b><span>i snit på appen (1–5)</span><small>${g.svar} teamere har evalueret appen</small></div>${box("Mest brugt", g.mest)}${box("Mindst brugt", g.mindst)}`; } else inner = `<div class="wcard"><span>Resultatet vises, når mindst 3 teamere har evalueret appen.</span></div>`; body = `<div class="w1" style="font-size:26px;font-weight:800">Appen i ugens løb</div><div class="wnote">Hvad teamet selv siger de brugte mest og mindst</div>${inner}`; }
   if (it.k === "udvikling") {
     const ds = it.days, W = 330, H = 190, px = k => 30 + (ds.length === 1 ? 135 : (k * 270) / (ds.length - 1)), py = m => 160 - ((m - 1) / 3) * 130;
     const first = ds[0].mood, last = ds[ds.length - 1].mood, peak = [...ds].sort((a, b) => b.mood - a.mood)[0], trend = last - first > 0.4 ? ["Din uge steg 📈", "Du sluttede højere, end du startede"] : last - first < -0.4 ? ["Ugen blev tungere 📉", "Det sker. Det er netop derfor, vi evaluerer"] : ["Stabil hele ugen ⚖️", "Jævn energi fra start til slut"];
@@ -1102,8 +1088,7 @@ async function tryUnlock(pw) {
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-act]"); if (!el || el.tagName === "INPUT" || el.tagName === "SELECT") return;
   const [act, ...p] = el.dataset.act.split(":");
-  if (!/^(ev|wr|ap|vq|tq|sq)/.test(act) || act === "evstart" || act === "evdone") track("act:" + act);
-  if (el.closest("a")) ev.preventDefault();
+    if (el.closest("a")) ev.preventDefault();
   if (act === "claim") { const id = p.join(":"), doc = !!(S.me && S.data.aktiviteter[id] && (S.data.aktiviteter[id].bemanding.includes(S.me) || S.data.aktiviteter[id].ansvarligNavne.includes(S.me))); const now1 = mineAct(id); if (now1) { doc ? (S.claim[id] = -1) : delete S.claim[id]; } else { doc ? delete S.claim[id] : (S.claim[id] = 1); } saveClaim(); }
   else if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
   else if (act === "evaltoggle") { S.evalOn = !S.evalOn; ls.set("lp_eval_on", S.evalOn ? "1" : "0"); }
@@ -1111,8 +1096,7 @@ document.addEventListener("click", ev => {
   else if (act === "apexit") { S.ap = null; location.hash = "#/eval"; return; }
   else if (act === "apstars") { S.ap.stjerner = +p[0]; }
   else if (act === "apchip") { const f = p[0], k = p.slice(1).join(":"), arr = S.ap[f] = S.ap[f] || [], i = arr.indexOf(k); i >= 0 ? arr.splice(i, 1) : arr.push(k); }
-  else if (act === "apconsent") { S.ap.samtykke = S.ap.samtykke === false; }
-  else if (act === "apsend") { const u = usageSummary(); S.appEval = { ...S.ap, t: new Date().toISOString().slice(0, 16), sendt: 0 }; if (S.appEval.samtykke !== false) { S.appEval.brug = u.brug; S.appEval.dage = u.dage; } else { delete S.appEval.brug; } ls.set("lp_appeval", JSON.stringify(S.appEval)); S.ap = null; sendAppEval().then(() => render()); location.hash = "#/eval"; return; }
+  else if (act === "apsend") { S.appEval = { ...S.ap, t: new Date().toISOString().slice(0, 16), sendt: 0 }; ls.set("lp_appeval", JSON.stringify(S.appEval)); S.ap = null; sendAppEval().then(() => render()); location.hash = "#/eval"; return; }
   else if (act === "evsong") { const s = songsOf(S.ev.akt)[+p[0]], f = document.querySelector(".box iframe"); if (s && f) f.src = "https://suno.com/embed/" + s.id; return; }
   else if (act === "evstart") { S.ev = { akt: p.join(":"), step: 1, d: JSON.parse(JSON.stringify(S.evals[p.join(":")] || {})) }; if (location.hash === "#/eval/q") render(); else location.hash = "#/eval/q"; window.scrollTo(0, 0); return; }
   else if (act === "evexit") { S.ev = null; location.hash = "#/eval"; return; }
@@ -1223,7 +1207,7 @@ window.addEventListener("hashchange", () => {
     if (S.data) { render(); window.scrollTo(0, 0); } else if (S.env) { S.loginErr = ""; tryUnlock(m[1]); }
     return;
   }
-  S.expand = false; trackRoute(); render(); window.scrollTo(0, 0); });
+  S.expand = false; render(); window.scrollTo(0, 0); });
 setInterval(() => { if (S.data && !document.querySelector(".sheetbg") && !S.demo && /^#\/?(uge(\/\d)?)?$|^#\/a\/[^/]+\/tid$/.test(location.hash)) render(); }, 30000);
 
 // ---------- opdateringer ----------
@@ -1268,5 +1252,5 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
     catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
   } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
   if (S.data && !location.hash) location.hash = "#/uge";
-  trackDay(); track("_aabninger"); trackRoute(); render(); checkVersion(); setTimeout(() => flushEvals(), 4000);
+  render(); checkVersion(); setTimeout(() => flushEvals(), 4000);
 })();
