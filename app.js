@@ -888,12 +888,12 @@ function wrapDays(s) {   // én side pr. dag, du stod på noget
 function funFacts(s) {
   const D = S.data, evK = D.events.filter(e => e.maalgruppe === "kursist"), dur = e => mm(e.slut) - mm(e.start);
   const longest = [...evK].filter(e => e.aktivitet).sort((a, b) => dur(b) - dur(a))[0], mostStaffed = Object.values(D.aktiviteter).sort((a, b) => b.bemanding.length - a.bemanding.length)[0];
-  const songs = Object.values(D.sange || {}).reduce((n, l) => n + l.length, 0), kursistTimer = Math.round(evK.reduce((t, e) => t + dur(e), 0) / 60), hrs = s.timer || 0;
+  const kursistTimer = Math.round(evK.reduce((t, e) => t + dur(e), 0) / 60), hrs = s.timer || 0;
   const f = [
     `Ugen havde ${evK.length} programpunkter for kursisterne, ca. ${kursistTimer} timer i alt`,
     longest ? `Længste aktivitet: ${longest.titel.split(" (")[0]} (${Math.floor(dur(longest) / 60)} t ${dur(longest) % 60} min)` : "",
     `${mostStaffed.bemanding.length} teamere stod på ${mostStaffed.titel.split(" (")[0]}, ugens mest bemandede`,
-    `${D.personer.length} teamere, ${(D.patruljer || []).length} patruljer og ${songs} Suno-sange blev det til`,
+    `${D.personer.length} teamere og ${(D.patruljer || []).length} patruljer blev det til`,
     "Patruljens halve døgn varede 19,5 timer, fra tirsdag kl. 15:00 til onsdag kl. 10:30",
     "5 shelters i Gribskov var booket, og 2,2 km var gåturen til stationen",
   ];
