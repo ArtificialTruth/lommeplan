@@ -143,7 +143,7 @@ const minePill = () => {
   if (S.demo) h += `<div class="chips"><span class="pill">Demo-tid ${esc(S.demo.replace("T", " "))}</span></div>`;
   return h;
 };
-const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["patruljer", "⚑", "Patruljer"], ...(S.evalOn ? [["eval", "✎", "Evaluering"]] : []), ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
+const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["patruljer", "⚑", "Patruljer"], ...(S.evalOn ? [["eval", "✎", "Evaluering"]] : []), ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="${k === "eval" && S.evResume ? S.evResume : "#/" + k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
 function weekOverview(sel) {
@@ -759,10 +759,11 @@ const featLabel = k => (FEATURES.find(f => f[0] === k) || [k, k])[1];
 
 // ---------- Evaluering + Wrapped (testfane: slås til under Mig) ----------
 Object.assign(S, {
-  evalOn: ls.get("lp_eval_on") !== "0", evalAll: ls.get("lp_eval_all") === "1", ev: null, wr: 0, agg: null, lydOk: null,
+  evalOn: ls.get("lp_eval_on") !== "0", evalAll: ls.get("lp_eval_all") === "1", ev: null, evResume: "", evDrafts: (() => { try { return JSON.parse(ls.get("lp_evdrafts", "{}")); } catch { return {}; } })(), ap: (() => { try { return JSON.parse(ls.get("lp_apdraft", "null")); } catch { return null; } })(), wr: 0, agg: null, lydOk: null,
   evals: (() => { try { return JSON.parse(ls.get("lp_evals", "{}")); } catch { return {}; } })(),
   evSent: (() => { try { return JSON.parse(ls.get("lp_evsent", "{}")); } catch { return {}; } })(),
 });
+const saveDrafts = () => { try { if (S.ev) { S.evDrafts[S.ev.akt] = S.ev; ls.set("lp_evcur", S.ev.akt); } ls.set("lp_evdrafts", JSON.stringify(S.evDrafts)); if (S.ap) ls.set("lp_apdraft", JSON.stringify(S.ap)); else ls.del("lp_apdraft"); } catch {} };
 const saveEvals = () => { ls.set("lp_evals", JSON.stringify(S.evals)); ls.set("lp_evsent", JSON.stringify(S.evSent)); };
 const devId = () => { let d = ls.get("lp_devid"); if (!d) { d = [...crypto.getRandomValues(new Uint8Array(12))].map(x => x.toString(16).padStart(2, "0")).join(""); ls.set("lp_devid", d); } return d; };
 const EV = {
@@ -807,7 +808,7 @@ function viewEval(sub) {
     <div class="box" style="display:flex;gap:14px;align-items:center;margin-top:14px"><svg width="76" height="76" viewBox="0 0 76 76" style="flex:none"><circle cx="38" cy="38" r="30" fill="none" stroke="var(--line)" stroke-width="9"/><circle cx="38" cy="38" r="30" fill="none" stroke="var(--ac)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(circ * pct).toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 38 38)"/><text x="38" y="44" text-anchor="middle" font-size="16" font-weight="800" fill="var(--tx)">${done}/${rows.length}</text></svg>
     <div style="flex:1"><b>Du har evalueret ${done} af ${rows.length}</b><div class="muted">Hver tager ca. 1 minut</div>${nxt ? `<button class="btn" data-act="evstart:${nxt.a.id}" style="margin:8px 0 0;padding:8px">Evaluér næste: ${esc(nxt.a.titel.split(" (")[0])} ▶</button>` : ""}</div></div>`;
   if (!rows.length) h += `<div class="box muted">Du står ikke på nogen aktiviteter endnu.</div>`;
-  for (const r of rows) h += `<div class="card" style="display:flex;align-items:center;gap:12px;padding-left:14px"><span class="cb ${r.done ? "on" : ""}" style="pointer-events:none">${r.done ? "✓" : ""}</span><div style="flex:1"><div class="n">${esc(r.a.titel.split(" (")[0])}</div><div class="p">${DAYS[dayIdx(r.first.dato)].slice(0, 3)} ${r.first.start}${r.ok ? "" : " · ikke afholdt endnu"}</div></div>${r.done ? `<button class="pill" data-act="evstart:${r.a.id}" style="color:var(--act)">Redigér</button>` : r.ok ? `<button class="pill on" data-act="evstart:${r.a.id}" style="background:var(--ac);color:#000;font-weight:800;border-color:var(--ac)">Start</button>` : ""}${r.done && S.data.evalUrl ? `<span class="muted" title="${S.evSent[r.a.id] ? "Sendt" : "Gemt på telefonen"}" style="font-size:14px">${S.evSent[r.a.id] ? "☁✓" : "☁…"}</span>` : ""}</div>`;
+  for (const r of rows) h += `<div class="card" style="display:flex;align-items:center;gap:12px;padding-left:14px"><span class="cb ${r.done ? "on" : ""}" style="pointer-events:none">${r.done ? "✓" : ""}</span><div style="flex:1"><div class="n">${esc(r.a.titel.split(" (")[0])}</div><div class="p">${DAYS[dayIdx(r.first.dato)].slice(0, 3)} ${r.first.start}${r.ok ? "" : " · ikke afholdt endnu"}${S.evDrafts[r.a.id] ? " · udkast gemt" : ""}</div></div>${r.done ? `<button class="pill" data-act="evstart:${r.a.id}" style="color:var(--act)">Redigér</button>` : r.ok ? `<button class="pill on" data-act="evstart:${r.a.id}" style="background:var(--ac);color:#000;font-weight:800;border-color:var(--ac)">Start</button>` : ""}${r.done && S.data.evalUrl ? `<span class="muted" title="${S.evSent[r.a.id] ? "Sendt" : "Gemt på telefonen"}" style="font-size:14px">${S.evSent[r.a.id] ? "☁✓" : "☁…"}</span>` : ""}</div>`;
   h += `<a class="card" href="#/eval/app" style="display:flex;align-items:center;gap:12px;padding-left:14px;text-decoration:none"><span class="cb ${S.appEval ? "on" : ""}" style="pointer-events:none">${S.appEval ? "✓" : ""}</span><div style="flex:1"><div class="n">📱 Evaluér selve appen</div><div class="p">Hvad brugte du mest og mindst?</div></div><span class="pill ${S.appEval ? "" : "on"}" style="${S.appEval ? "color:var(--act)" : "background:var(--ac);color:#000;font-weight:800;border-color:var(--ac)"}">${S.appEval ? "Redigér" : "Start"}</span></a>`;
   h += all ? `<a class="btn" href="#/eval/wrapped/0" style="margin-top:14px;text-decoration:none">🎧 Åbn din uge som Wrapped</a>` : `<div class="box" style="background:#ede9fe;color:#14161a;display:flex;justify-content:space-between;align-items:center"><div><b>🎧 Din uge, som Wrapped</b><div class="muted" style="color:#4c4c5c">Åbner, når du har evalueret alle</div></div><span style="font-size:18px">🔒</span></div>`;
   if (!S.data.evalUrl) h += `<div class="hint">Serveren er ikke sat op endnu. Svar gemmes kun på din telefon.</div>`;
@@ -829,7 +830,7 @@ function evBody() {
 const evFoot = () => { const step = S.ev.step; return `<button class="btn" data-act="${step === EV_N ? "evdone" : "evnext"}" style="margin:0 0 6px">${step === EV_N ? "Færdig" : "Næste"}</button><div style="display:flex;justify-content:space-between"><button data-act="evback" class="muted" ${step === 1 ? "disabled" : ""} style="padding:8px">‹ Tilbage</button>${step < EV_N ? '<button data-act="evnext" class="muted" style="padding:8px">Spring over</button>' : ""}</div>`; };
 function evPartial() {   // skift spørgsmål uden at genindlæse siden, så sangen bliver ved med at spille
   const b = document.getElementById("evbody"); if (!b || !S.ev) return false;
-  b.innerHTML = evBody(); document.getElementById("evprog").style.width = (S.ev.step / EV_N) * 100 + "%"; document.getElementById("evstep").textContent = S.ev.step + "/" + EV_N; document.getElementById("evfoot").innerHTML = evFoot(); return true;
+  saveDrafts(); b.innerHTML = evBody(); document.getElementById("evprog").style.width = (S.ev.step / EV_N) * 100 + "%"; document.getElementById("evstep").textContent = S.ev.step + "/" + EV_N; document.getElementById("evfoot").innerHTML = evFoot(); return true;
 }
 function viewEvQ() {
   const { akt, step } = S.ev, a = S.data.aktiviteter[akt], songs = songsOf(akt);
@@ -1041,6 +1042,7 @@ function updateNowLine() {
 window.addEventListener("resize", updateNowLine);
 // ---------- router + events ----------
 function render() {
+  saveDrafts();
   if (S.data && S.onb) { $app.innerHTML = viewOnb(); return; }
   if (!S.data) { $app.innerHTML = S.loading ? '<p class="muted" style="padding-top:30vh;text-align:center">Henter plan …</p>' : viewLogin(); bindLogin(); return; }
   let [r = "uge", a, b] = location.hash.replace(/^#\/?/, "").split("/");
@@ -1052,9 +1054,10 @@ function render() {
   else if (r === "husk") { h = viewHusk(); tab = "husk"; }
   else if (r === "eval" && S.evalOn) {
     if (a === "wrapped") { $app.innerHTML = viewWrapped(+b || 0); if (!S.agg) loadAgg(); if (!S.aggApp) loadAggApp(); return; }
-    if (a === "app") { if (!S.ap) S.ap = JSON.parse(JSON.stringify(S.appEval || { samtykke: true })); h = viewAppEval(); tab = "eval"; return $app.innerHTML = h + nav(tab), void 0; }
+    if (a === "app") { S.evResume = "#/eval/app"; if (!S.ap) S.ap = JSON.parse(JSON.stringify(S.appEval || { samtykke: true })); h = viewAppEval(); tab = "eval"; return $app.innerHTML = h + nav(tab), void 0; }
+    if (a === "q" && !S.ev) { const c = ls.get("lp_evcur"); if (c && S.evDrafts[c]) S.ev = S.evDrafts[c]; }
     if (a === "q" && !S.ev) { history.replaceState(null, "", "#/eval"); a = ""; }   // genåbnet app på et spørgsmål uden udkast: tilbage til checklisten
-    h = viewEval(a); tab = "eval";
+    S.evResume = a === "q" ? "#/eval/q" : ""; h = viewEval(a); tab = "eval";
   }
   else if (r === "soeg") { h = viewSoeg(); tab = "uge"; }
   else if (r === "patruljer") { h = viewPatruljer(a, b); tab = "patruljer"; }
@@ -1093,19 +1096,19 @@ document.addEventListener("click", ev => {
   else if (act === "aud") { S.aud = p[0]; ls.set("lp_aud", S.aud); }
   else if (act === "evaltoggle") { S.evalOn = !S.evalOn; ls.set("lp_eval_on", S.evalOn ? "1" : "0"); }
   else if (act === "evalall") { S.evalAll = !S.evalAll; ls.set("lp_eval_all", S.evalAll ? "1" : "0"); }
-  else if (act === "apexit") { S.ap = null; location.hash = "#/eval"; return; }
+  else if (act === "apexit") { saveDrafts(); S.evResume = ""; location.hash = "#/eval"; return; }
   else if (act === "apstars") { S.ap.stjerner = +p[0]; }
   else if (act === "apchip") { const f = p[0], k = p.slice(1).join(":"), arr = S.ap[f] = S.ap[f] || [], i = arr.indexOf(k); i >= 0 ? arr.splice(i, 1) : arr.push(k); }
-  else if (act === "apsend") { S.appEval = { ...S.ap, t: new Date().toISOString().slice(0, 16), sendt: 0 }; ls.set("lp_appeval", JSON.stringify(S.appEval)); S.ap = null; sendAppEval().then(() => render()); location.hash = "#/eval"; return; }
+  else if (act === "apsend") { S.appEval = { ...S.ap, t: new Date().toISOString().slice(0, 16), sendt: 0 }; ls.set("lp_appeval", JSON.stringify(S.appEval)); S.ap = null; S.evResume = ""; saveDrafts(); sendAppEval().then(() => render()); location.hash = "#/eval"; return; }
   else if (act === "evsong") { const s = songsOf(S.ev.akt)[+p[0]], f = document.querySelector(".box iframe"); if (s && f) f.src = "https://suno.com/embed/" + s.id; return; }
-  else if (act === "evstart") { S.ev = { akt: p.join(":"), step: 1, d: JSON.parse(JSON.stringify(S.evals[p.join(":")] || {})) }; if (location.hash === "#/eval/q") render(); else location.hash = "#/eval/q"; window.scrollTo(0, 0); return; }
-  else if (act === "evexit") { S.ev = null; location.hash = "#/eval"; return; }
+  else if (act === "evstart") { S.ev = S.evDrafts[p.join(":")] || { akt: p.join(":"), step: 1, d: JSON.parse(JSON.stringify(S.evals[p.join(":")] || {})) }; if (location.hash === "#/eval/q") render(); else location.hash = "#/eval/q"; window.scrollTo(0, 0); return; }
+  else if (act === "evexit") { saveDrafts(); S.ev = null; S.evResume = ""; location.hash = "#/eval"; return; }
   else if (act === "evnext") { if (S.ev) S.ev.step = Math.min(5, S.ev.step + 1); window.scrollTo(0, 0); if (evPartial()) return; }
   else if (act === "evback") { if (S.ev) S.ev.step = Math.max(1, S.ev.step - 1); window.scrollTo(0, 0); if (evPartial()) return; }
   else if (act === "evmave") { S.ev.d.mave = +p[0]; if (evPartial()) return; }
   else if (act === "evstars") { S.ev.d.indsigt = +p[0]; if (evPartial()) return; }
   else if (act === "evchip") { const f = p[0], l = p.slice(1).join(":"), arr = S.ev.d[f] = S.ev.d[f] || []; const i = arr.indexOf(l); i >= 0 ? arr.splice(i, 1) : arr.push(l); if (evPartial()) return; }
-  else if (act === "evdone") { S.ev.d.t = new Date().toISOString().slice(0, 16); S.evals[S.ev.akt] = S.ev.d; S.evSent[S.ev.akt] = 0; saveEvals(); const k = S.ev.akt; S.ev = null; sendEval(k).then(() => render()); location.hash = "#/eval"; return; }
+  else if (act === "evdone") { S.ev.d.t = new Date().toISOString().slice(0, 16); S.evals[S.ev.akt] = S.ev.d; S.evSent[S.ev.akt] = 0; saveEvals(); const k = S.ev.akt; delete S.evDrafts[k]; S.ev = null; S.evResume = ""; saveDrafts(); sendEval(k).then(() => render()); location.hash = "#/eval"; return; }
   else if (act === "wr") { const m = location.hash.match(/wrapped\/(\d+)/), N = wrapSlides().sl.length, i = Math.max(0, Math.min(N - 1, (m ? +m[1] : 0) + +p[0])); location.hash = "#/eval/wrapped/" + i; return; }
   else if (act === "vopen") { S.vopen = !S.vopen; S.vq = ""; }
   else if (act === "vset") { S.viewAs = p.join(":"); ls.set("lp_viewas", S.viewAs); S.vopen = false; S.vq = ""; if (!partnersOf(S.viewAs).length) S.withPartner = false; }
@@ -1169,8 +1172,8 @@ document.addEventListener("click", ev => {
   render();
 });
 document.addEventListener("input", ev => {
-  if (ev.target.id && ev.target.id.startsWith("ap_") && S.ap) { S.ap[ev.target.id.slice(3)] = ev.target.value; return; }
-  if (ev.target.id && ev.target.id.startsWith("ev_") && S.ev) { S.ev.d[ev.target.id.slice(3)] = ev.target.value; return; }
+  if (ev.target.id && ev.target.id.startsWith("ap_") && S.ap) { S.ap[ev.target.id.slice(3)] = ev.target.value; saveDrafts(); return; }
+  if (ev.target.id && ev.target.id.startsWith("ev_") && S.ev) { S.ev.d[ev.target.id.slice(3)] = ev.target.value; saveDrafts(); return; }
   if (ev.target.id === "sq") { S.sq = ev.target.value; const el = document.getElementById("sres"); if (el) el.innerHTML = soegResultater(S.sq); return; }
   if (ev.target.id === "vq") { S.vq = ev.target.value; const pos = ev.target.selectionStart; render(); const el = document.getElementById("vq"); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; }
   if (ev.target.id === "tq") { S.teamQ = ev.target.value; const pos = ev.target.selectionStart; render(); const el = document.getElementById("tq"); if (el) { el.focus(); el.setSelectionRange(pos, pos); } return; } const el = ev.target; if (el.dataset && el.dataset.plname !== undefined) { S.pl.names[+el.dataset.plname] = el.value; savePl(); } });
