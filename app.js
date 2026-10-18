@@ -143,7 +143,7 @@ const minePill = () => {
   if (S.demo) h += `<div class="chips"><span class="pill">Demo-tid ${esc(S.demo.replace("T", " "))}</span></div>`;
   return h;
 };
-const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["patruljer", "⚑", "Patruljer"], ...(S.evalOn ? [["eval", "🎧", "Evaluering"]] : []), ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
+const nav = r => `<nav class="bar2"><div class="in">${[["uge", "▤", "Uge"], ["husk", "☑", "Huskeliste"], ["patruljer", "⚑", "Patruljer"], ...(S.evalOn ? [["eval", "✎", "Evaluering"]] : []), ["mine", "★", "Mig"]].map(([k, i, l]) => `<a href="#/${k}" class="${r === k ? "on" : ""}"><i>${i}</i>${l}</a>`).join("")}</div></nav>`;
 
 // ---------- skærme ----------
 function weekOverview(sel) {
@@ -324,7 +324,7 @@ function viewMine() {
     <h2>Mine data</h2><div class="box"><div class="muted">Dine rettelser, huskeliste og valg gemmes kun på denne telefon, og opdateringer af appen sletter dem ikke. Tag en sikkerhedskopi, hvis du skifter telefon eller rydder browserdata.</div>${nOver ? `<div class="hint">${nOver} rettede felter.${orphans ? ` ${orphans} hører til punkter, der er ændret i planen, og vises ikke længere.` : ""}</div>` : ""}
     <div class="row2"><button class="btn alt" data-act="exp">Sikkerhedskopi</button><label class="btn alt" style="margin:10px 0">Indlæs kopi<input type="file" accept="application/json,.json" data-act="imp" hidden></label></div>
     ${nOver ? '<button class="btn ghost" data-act="resetall">Nulstil alle rettelser</button>' : ""}</div>
-    <h2>Test</h2><div class="box"><div class="line"><div><b>Vis Evaluering-fanen</b><div class="muted">Skjult som standard</div></div><button class="toggle ${S.evalOn ? "on" : ""}" data-act="evaltoggle" aria-label="Evaluering"></button></div>${S.evalOn ? `<div class="line"><div><b>Tillad alle aktiviteter</b><div class="muted">Også dem, der ikke er afholdt</div></div><button class="toggle ${S.evalAll ? "on" : ""}" data-act="evalall" aria-label="Alle"></button></div>` : ""}</div>
+    <h2>Test</h2><div class="box"><div class="line"><div><b>Vis Evaluering-fanen</b><div class="muted">Vist som standard</div></div><button class="toggle ${S.evalOn ? "on" : ""}" data-act="evaltoggle" aria-label="Evaluering"></button></div>${S.evalOn ? `<div class="line"><div><b>Tillad alle aktiviteter</b><div class="muted">Også dem, der ikke er afholdt</div></div><button class="toggle ${S.evalAll ? "on" : ""}" data-act="evalall" aria-label="Alle"></button></div>` : ""}</div>
     <h2>Avanceret</h2><div class="box"><button class="btn alt" data-act="guide">Vis installationsguide</button><div class="field"><label>Demo-tid (test af “Nu”)</label><input type="datetime-local" data-act="demo" value="${esc(S.demo || "")}"></div>
     ${S.demo ? '<button class="btn alt" data-act="demooff">Brug rigtig tid</button>' : ""}
     <div class="hint">Plan genereret ${esc(S.data.genereret)} · adgang udløber ${esc(String(S.exp || "").slice(0, 10))}</div>
@@ -759,7 +759,7 @@ const featLabel = k => (FEATURES.find(f => f[0] === k) || [k, k])[1];
 
 // ---------- Evaluering + Wrapped (testfane: slås til under Mig) ----------
 Object.assign(S, {
-  evalOn: ls.get("lp_eval_on") === "1", evalAll: ls.get("lp_eval_all") === "1", ev: null, wr: 0, agg: null, lydOk: null,
+  evalOn: ls.get("lp_eval_on") !== "0", evalAll: ls.get("lp_eval_all") === "1", ev: null, wr: 0, agg: null, lydOk: null,
   evals: (() => { try { return JSON.parse(ls.get("lp_evals", "{}")); } catch { return {}; } })(),
   evSent: (() => { try { return JSON.parse(ls.get("lp_evsent", "{}")); } catch { return {}; } })(),
 });
