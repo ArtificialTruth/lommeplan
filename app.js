@@ -1249,7 +1249,7 @@ async function refreshData() {   // ny plan uden genstart: hent og dekryptér st
   const key = ls.get("lp_key"); if (!S.data || !key || document.querySelector(".sheetbg")) return;
   try {
     const env = await (await fetch("data.enc.json", { cache: "no-cache" })).json(), d = await decryptData(env, key);
-    if (d.genereret !== S.data.genereret || JSON.stringify(d.nyheder) !== JSON.stringify(S.data.nyheder)) { S.data = d; S.idx = null; render(); }
+    if (d.genereret !== S.data.genereret || JSON.stringify(d.nyheder) !== JSON.stringify(S.data.nyheder)) { S.data = d; S.idx = null; if (Date.now() <= Date.parse(d.exp)) { S.exp = d.exp; ls.set("lp_exp", d.exp); } render(); }
   } catch {}
 }
 function periodic() { checkVersion(); refreshData(); }
@@ -1271,11 +1271,11 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.inst
     history.replaceState(null, "", location.pathname + location.search + "#/uge");
     if (await tryUnlock(m[1])) return;
   }
-  const key = ls.get("lp_key"), exp = ls.get("lp_exp");
-  if (key && (!exp || Date.now() < Date.parse(exp))) {
-    try { S.data = await decryptData(S.env, key); S.me = ls.get("lp_name") || null; { const M = { Marie: "Bondo", Havbro: "Mads", Mathilde: "Mathilde G" }; if (S.me && M[S.me]) { S.me = M[S.me]; ls.set("lp_name", S.me); } } S.exp = exp; S.onb = ls.get("lp_onb") === "1" ? 0 : (S.me || standalone() ? (S.me ? 0 : 2) : 1); }
-    catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
-  } else if (key) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
+  const key = ls.get("lp_key");
+  if (key) try { const d = await decryptData(S.env, key);   // d.exp fra den nyeste byggede plan styrer — cachelagret lp_exp kan have udløbet siden
+    if (Date.now() > Date.parse(d.exp)) { ["lp_key", "lp_name", "lp_exp"].forEach(ls.del); S.loginErr = "Adgangen er udløbet."; }
+    else { S.data = d; S.me = ls.get("lp_name") || null; { const M = { Marie: "Bondo", Havbro: "Mads", Mathilde: "Mathilde G" }; if (S.me && M[S.me]) { S.me = M[S.me]; ls.set("lp_name", S.me); } } S.exp = d.exp; ls.set("lp_exp", d.exp); S.onb = ls.get("lp_onb") === "1" ? 0 : (S.me || standalone() ? (S.me ? 0 : 2) : 1); } }
+  catch { ls.del("lp_key"); S.loginErr = "Planen er låst med en ny kode. Skriv den nye kode."; }
   if (S.data && !location.hash) location.hash = "#/uge";
   render(); checkVersion(); setTimeout(() => flushEvals(), 4000);
 })();
